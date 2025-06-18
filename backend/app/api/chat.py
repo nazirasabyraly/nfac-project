@@ -5,7 +5,7 @@ import json
 from ..services.openai_service import OpenAIService
 from ..config import MAX_FILE_SIZE, ALLOWED_EXTENSIONS
 
-router = APIRouter(prefix="/api/chat", tags=["chat"])
+router = APIRouter(tags=["chat"])
 
 # Инициализируем сервисы
 openai_service = OpenAIService()
@@ -19,6 +19,8 @@ async def analyze_media(
     Анализирует загруженный медиафайл и возвращает анализ настроения
     """
     try:
+        print(f"🔍 Получен файл: {file.filename}, размер: {file.size}, тип: {file.content_type}")
+        
         # Проверяем размер файла
         if file.size and file.size > MAX_FILE_SIZE:
             raise HTTPException(status_code=400, detail="Файл слишком большой (максимум 10MB)")
@@ -26,14 +28,21 @@ async def analyze_media(
         # Проверяем расширение файла
         if file.filename:
             file_ext = '.' + file.filename.split('.')[-1].lower()
+            print(f"📁 Расширение файла: {file_ext}")
+            print(f"✅ Разрешенные расширения: {ALLOWED_EXTENSIONS}")
+            
             if file_ext not in ALLOWED_EXTENSIONS:
                 raise HTTPException(
                     status_code=400, 
                     detail=f"Неподдерживаемый тип файла. Разрешены: {', '.join(ALLOWED_EXTENSIONS)}"
                 )
         
+        print("🚀 Начинаем анализ медиафайла...")
+        
         # Анализируем медиафайл
         analysis = await openai_service.analyze_media_mood(file)
+        
+        print(f"📊 Результат анализа: {analysis}")
         
         if "error" in analysis:
             raise HTTPException(status_code=500, detail=analysis["error"])
@@ -41,6 +50,7 @@ async def analyze_media(
         return JSONResponse(content=analysis)
         
     except Exception as e:
+        print(f"❌ Ошибка в analyze_media: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Ошибка анализа файла: {str(e)}")
 
 @router.post("/get-recommendations")

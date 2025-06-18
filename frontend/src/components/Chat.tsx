@@ -101,6 +101,9 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    console.log('📁 Файл выбран:', file.name, 'размер:', file.size, 'тип:', file.type);
+    console.log('🌐 API URL:', apiBaseUrl);
+
     setUploadingFile(true);
 
     try {
@@ -122,12 +125,16 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
       const formData = new FormData();
       formData.append('file', file);
 
+      console.log('🚀 Отправляем запрос на анализ...');
       const analysisResponse = await fetch(`${apiBaseUrl}/chat/analyze-media`, {
         method: 'POST',
         body: formData
       });
 
+      console.log('📡 Получен ответ:', analysisResponse.status, analysisResponse.statusText);
+
       const analysisData = await analysisResponse.json();
+      console.log('📊 Данные анализа:', analysisData);
 
       if (analysisData.success) {
         setCurrentMoodAnalysis(analysisData);
@@ -143,6 +150,7 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
 
         setMessages(prev => [...prev, analysisMessage]);
 
+        console.log('🎵 Запрашиваем рекомендации...');
         // Получаем рекомендации
         const recommendationsResponse = await fetch(`${apiBaseUrl}/chat/get-recommendations`, {
           method: 'POST',
@@ -155,7 +163,10 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
           })
         });
 
+        console.log('📡 Получен ответ рекомендаций:', recommendationsResponse.status);
+
         const recommendationsData = await recommendationsResponse.json();
+        console.log('🎵 Данные рекомендаций:', recommendationsData);
 
         if (recommendationsData.success) {
           const recommendations = recommendationsData.recommendations;
@@ -176,6 +187,7 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
           setMessages(prev => [...prev, recommendationsMessage]);
         }
       } else {
+        console.error('❌ Ошибка анализа:', analysisData.error);
         const errorMessage: Message = {
           id: (Date.now() + 1).toString(),
           type: 'ai',
@@ -185,7 +197,7 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
         setMessages(prev => [...prev, errorMessage]);
       }
     } catch (error) {
-      console.error('Ошибка загрузки файла:', error);
+      console.error('❌ Ошибка загрузки файла:', error);
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: 'ai',
