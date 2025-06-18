@@ -1,10 +1,5 @@
 // src/config.ts
 
-// Принудительно очищаем старый URL из localStorage
-if (typeof window !== 'undefined') {
-  localStorage.removeItem('ngrok_backend_url');
-}
-
 // Определяем базовый URL API в зависимости от окружения
 const getApiBaseUrl = () => {
   if (typeof window !== 'undefined') {
@@ -14,7 +9,7 @@ const getApiBaseUrl = () => {
   if (import.meta.env.VITE_API_BASE_URL) {
     return import.meta.env.VITE_API_BASE_URL;
   }
-  return "http://localhost:8001";
+  return "https://b864-95-56-238-194.ngrok-free.app";
 };
 
 export const API_BASE_URL = getApiBaseUrl();

@@ -9,9 +9,11 @@ const Login = () => {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [username, setUsername] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [showManualLogin, setShowManualLogin] = useState(false)
+  const [isRegistering, setIsRegistering] = useState(false)
 
   const handleSpotifyOAuth = async () => {
     setIsLoading(true)
@@ -21,7 +23,7 @@ const Login = () => {
       // Прямой редирект на Spotify OAuth
       const scope = "user-top-read user-read-recently-played user-read-private user-read-email playlist-read-private user-library-read"
       const clientId = "a95c13aa064c44a4affeea5627147ca1" // Spotify Client ID
-      const redirectUri = "https://9a9d-95-56-238-194.ngrok-free.app/callback"
+      const redirectUri = "https://b864-95-56-238-194.ngrok-free.app/auth/spotify/callback"
       
       const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}`
       
@@ -33,30 +35,47 @@ const Login = () => {
     }
   }
 
-  const handleManualLogin = async (e: React.FormEvent) => {
+  const handleManualAuth = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError('')
 
-    if (!email || !password) {
+    if (!email || !password || (isRegistering && !username)) {
       setError('Пожалуйста, заполните все поля')
       setIsLoading(false)
       return
     }
 
     try {
-      // Для ручного входа тоже используем Spotify OAuth
-      // (Spotify не поддерживает прямую авторизацию через email/password)
-      const scope = "user-top-read user-read-recently-played user-read-private user-read-email playlist-read-private user-library-read"
-      const clientId = "a95c13aa064c44a4affeea5627147ca1"
-      const redirectUri = "https://9a9d-95-56-238-194.ngrok-free.app/callback"
-      
-      const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}`
-      
-      window.location.href = authUrl
+      const endpoint = isRegistering ? '/users/register' : '/users/login'
+      const requestData = isRegistering 
+        ? { email, username, password }
+        : { email, password }
+
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData)
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        // Сохраняем токен и информацию о пользователе
+        localStorage.setItem('auth_token', data.access_token)
+        localStorage.setItem('user_info', JSON.stringify(data.user))
+        
+        // Перенаправляем на дашборд
+        navigate('/dashboard')
+      } else {
+        setError(data.detail || 'Ошибка аутентификации')
+      }
     } catch (error) {
       console.error('Error:', error)
       setError('Ошибка подключения к серверу')
+    } finally {
       setIsLoading(false)
     }
   }
@@ -87,13 +106,27 @@ const Login = () => {
               onClick={() => setShowManualLogin(true)}
               className="manual-login-btn"
             >
-              📧 Ввести email и пароль
+              📧 Регистрация / Вход
             </button>
           </div>
         ) : (
-          <form onSubmit={handleManualLogin} className="login-form">
+          <form onSubmit={handleManualAuth} className="login-form">
+            {isRegistering && (
+              <div className="form-group">
+                <label htmlFor="username">Имя пользователя</label>
+                <input
+                  type="text"
+                  id="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Введите имя пользователя"
+                  required
+                />
+              </div>
+            )}
+            
             <div className="form-group">
-              <label htmlFor="email">Email Spotify</label>
+              <label htmlFor="email">Email</label>
               <input
                 type="email"
                 id="email"
@@ -105,7 +138,7 @@ const Login = () => {
             </div>
             
             <div className="form-group">
-              <label htmlFor="password">Пароль Spotify</label>
+              <label htmlFor="password">Пароль</label>
               <input
                 type="password"
                 id="password"
@@ -124,7 +157,15 @@ const Login = () => {
                 disabled={isLoading}
                 className="login-submit-btn"
               >
-                {isLoading ? '🔄 Вход...' : 'Войти'}
+                {isLoading ? '🔄 Обработка...' : (isRegistering ? 'Зарегистрироваться' : 'Войти')}
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => setIsRegistering(!isRegistering)}
+                className="toggle-btn"
+              >
+                {isRegistering ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Зарегистрироваться'}
               </button>
               
               <button
@@ -145,6 +186,7 @@ const Login = () => {
             <li>🤖 ИИ-чат для анализа фото/видео</li>
             <li>🎵 Подбор музыки под настроение</li>
             <li>📱 Современный интерфейс</li>
+            <li>🔐 Безопасная регистрация и вход</li>
           </ul>
         </div>
       </div>

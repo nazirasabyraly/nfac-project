@@ -4,78 +4,69 @@ import httpx
 import base64
 from typing import List
 from app.config import SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI
+import os
+import requests
+from urllib.parse import urlencode
 
 SPOTIFY_API_BASE = "https://api.spotify.com/v1"
 
 
 
 async def get_user_profile(access_token: str):
+    """Получает профиль пользователя Spotify"""
     headers = {
-        "Authorization": f"Bearer {access_token}"
+        'Authorization': f'Bearer {access_token}'
     }
-
-    async with httpx.AsyncClient() as client:
-        response = await client.get("https://api.spotify.com/v1/me", headers=headers)
-        response.raise_for_status()
-        return response.json()
+    
+    response = requests.get('https://api.spotify.com/v1/me', headers=headers)
+    response.raise_for_status()
+    
+    return response.json()
 
 def get_spotify_auth_url():
-    # Расширенный scope для получения всех необходимых данных
-    scope = "user-top-read user-read-recently-played user-read-private user-read-email playlist-read-private user-library-read"
-    # Используем frontend ngrok URL для callback
-    frontend_callback_url = "https://9a9d-95-56-238-194.ngrok-free.app/callback"
-    return (
-        f"https://accounts.spotify.com/authorize"
-        f"?client_id={SPOTIFY_CLIENT_ID}"
-        f"&response_type=code"
-        f"&redirect_uri={frontend_callback_url}"
-        f"&scope={scope}"
-    )
+    """Генерирует URL для авторизации Spotify"""
+    params = {
+        'client_id': SPOTIFY_CLIENT_ID,
+        'response_type': 'code',
+        'redirect_uri': SPOTIFY_REDIRECT_URI,
+        'scope': 'user-top-read user-read-recently-played user-read-private user-read-email playlist-read-private user-library-read'
+    }
+    
+    auth_url = f"https://accounts.spotify.com/authorize?{urlencode(params)}"
+    return auth_url
 
 async def exchange_code_for_token(code: str):
-    print(f"🔄 Starting token exchange for code: {code[:10]}...")
+    """Обменивает код авторизации на access token"""
+    token_url = "https://accounts.spotify.com/api/token"
     
-    url = "https://accounts.spotify.com/api/token"
-    
-    # Используем frontend ngrok URL для callback
-    frontend_callback_url = "https://9a9d-95-56-238-194.ngrok-free.app/callback"
-    print(f"🌐 Using redirect_uri: {frontend_callback_url}")
-
-    headers = {
-        "Authorization": "Basic " + base64.b64encode(
-            f"{SPOTIFY_CLIENT_ID}:{SPOTIFY_CLIENT_SECRET}".encode()
-        ).decode(),
-        "Content-Type": "application/x-www-form-urlencoded"
-    }
-
     data = {
-        "grant_type": "authorization_code",
-        "code": code,
-        "redirect_uri": frontend_callback_url
+        'grant_type': 'authorization_code',
+        'code': code,
+        'redirect_uri': SPOTIFY_REDIRECT_URI
     }
     
-    print(f"📤 Request data: {data}")
-    print(f"🔑 Client ID: {SPOTIFY_CLIENT_ID[:10]}...")
-
-    async with httpx.AsyncClient() as client:
-        try:
-            print(f"🌐 Sending request to Spotify...")
-            response = await client.post(url, data=data, headers=headers)
-            print(f"📡 Response status: {response.status_code}")
-            print(f"📡 Response headers: {dict(response.headers)}")
-            
-            if response.status_code != 200:
-                error_text = response.text
-                print(f"❌ Spotify error response: {error_text}")
-                raise Exception(f"Spotify API error: {response.status_code} - {error_text}")
-            
-            response_data = response.json()
-            print(f"✅ Token exchange successful: {list(response_data.keys())}")
-            return response_data
-            
-        except Exception as e:
-            print(f"❌ Exception in exchange_code_for_token: {str(e)}")
-            raise e
+    # Правильное кодирование client_id:client_secret в base64
+    credentials = f"{SPOTIFY_CLIENT_ID}:{SPOTIFY_CLIENT_SECRET}"
+    encoded_credentials = base64.b64encode(credentials.encode()).decode()
+    
+    headers = {
+        'Authorization': f'Basic {encoded_credentials}',
+        'Content-Type': 'application/x-www-form-urlencoded'
+    }
+    
+    print(f"🔍 Token exchange debug:")
+    print(f"   Redirect URI: {SPOTIFY_REDIRECT_URI}")
+    print(f"   Client ID: {SPOTIFY_CLIENT_ID}")
+    print(f"   Code length: {len(code)}")
+    
+    response = requests.post(token_url, data=data, headers=headers)
+    
+    if not response.ok:
+        print(f"❌ Spotify API Error: {response.status_code}")
+        print(f"   Response: {response.text}")
+        response.raise_for_status()
+    
+    return response.json()
 
 
 # 🔽 Новый код — получение топ треков и фич

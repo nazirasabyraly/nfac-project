@@ -37,17 +37,40 @@ const Dashboard = () => {
   const [activeTab, setActiveTab] = useState<'analysis' | 'chat'>('analysis')
 
   useEffect(() => {
-    const token = localStorage.getItem('spotify_token')
-    if (!token) {
+    // Check for token in URL parameters (from Spotify OAuth redirect)
+    const urlParams = new URLSearchParams(window.location.search)
+    const tokenFromUrl = urlParams.get('token')
+    const spotifyIdFromUrl = urlParams.get('spotify_id')
+    
+    if (tokenFromUrl) {
+      console.log('🎯 Token found in URL, saving to localStorage')
+      localStorage.setItem('spotify_token', tokenFromUrl)
+      if (spotifyIdFromUrl) {
+        localStorage.setItem('spotify_id', spotifyIdFromUrl)
+      }
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname)
+    }
+
+    const authToken = localStorage.getItem('auth_token')
+    const spotifyToken = localStorage.getItem('spotify_token')
+    
+    if (!authToken && !spotifyToken) {
       navigate('/')
       return
     }
 
     const fetchData = async () => {
       try {
-        const headers = {
-          'Authorization': `Bearer ${token}`,
+        const headers: Record<string, string> = {
           'Content-Type': 'application/json'
+        }
+
+        // Используем auth_token для API запросов, если есть
+        if (authToken) {
+          headers['Authorization'] = `Bearer ${authToken}`
+        } else if (spotifyToken) {
+          headers['Authorization'] = `Bearer ${spotifyToken}`
         }
 
         // Получаем профиль пользователя
@@ -91,7 +114,9 @@ const Dashboard = () => {
   }, [navigate])
 
   const handleLogout = () => {
+    localStorage.removeItem('auth_token')
     localStorage.removeItem('spotify_token')
+    localStorage.removeItem('user_info')
     navigate('/')
   }
 
