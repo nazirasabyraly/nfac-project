@@ -2,7 +2,7 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth, media, recommend
+from app.api import auth, media, recommend, chat
 from app.config import HOST, PORT
 
 app = FastAPI(title="VibeMatch API")
@@ -20,6 +20,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/auth")
 app.include_router(media.router, prefix="/media")
 app.include_router(recommend.router, prefix="/recommend")
+app.include_router(chat.router, prefix="/chat")
 
 # Добавляем callback endpoint без префикса
 @app.get("/callback")

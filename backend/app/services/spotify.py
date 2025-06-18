@@ -23,7 +23,7 @@ def get_spotify_auth_url():
     # Расширенный scope для получения всех необходимых данных
     scope = "user-top-read user-read-recently-played user-read-private user-read-email playlist-read-private user-library-read"
     # Используем frontend ngrok URL для callback
-    frontend_callback_url = "https://ce80-95-56-238-194.ngrok-free.app/callback"
+    frontend_callback_url = "https://9a9d-95-56-238-194.ngrok-free.app/callback"
     return (
         f"https://accounts.spotify.com/authorize"
         f"?client_id={SPOTIFY_CLIENT_ID}"
@@ -38,7 +38,7 @@ async def exchange_code_for_token(code: str):
     url = "https://accounts.spotify.com/api/token"
     
     # Используем frontend ngrok URL для callback
-    frontend_callback_url = "https://ce80-95-56-238-194.ngrok-free.app/callback"
+    frontend_callback_url = "https://9a9d-95-56-238-194.ngrok-free.app/callback"
     print(f"🌐 Using redirect_uri: {frontend_callback_url}")
 
     headers = {

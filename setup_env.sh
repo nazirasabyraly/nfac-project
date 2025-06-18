@@ -17,6 +17,10 @@ read -p "Spotify Client ID: " spotify_client_id
 read -p "Spotify Client Secret: " spotify_client_secret
 
 echo ""
+echo "🤖 Введите OpenAI API Key:"
+read -p "OpenAI API Key: " openai_api_key
+
+echo ""
 echo "🌐 Введите frontend ngrok URL (например: https://def456.ngrok-free.app):"
 read -p "Frontend ngrok URL: " frontend_ngrok_url
 
@@ -36,6 +40,9 @@ cat > backend/.env << EOF
 # Spotify API credentials
 SPOTIFY_CLIENT_ID=$spotify_client_id
 SPOTIFY_CLIENT_SECRET=$spotify_client_secret
+
+# OpenAI API credentials
+OPENAI_API_KEY=$openai_api_key
 
 # Redirect URIs
 SPOTIFY_REDIRECT_URI=$spotify_redirect_uri
