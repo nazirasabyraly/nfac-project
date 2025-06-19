@@ -23,7 +23,8 @@ const Login = () => {
       // Прямой редирект на Spotify OAuth
       const scope = "user-top-read user-read-recently-played user-read-private user-read-email playlist-read-private user-library-read"
       const clientId = "a95c13aa064c44a4affeea5627147ca1" // Spotify Client ID
-      const redirectUri = "https://b864-95-56-238-194.ngrok-free.app/auth/spotify/callback"
+      const redirectUri = import.meta.env.VITE_SPOTIFY_REDIRECT_URI;
+
       
       const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}`
       
