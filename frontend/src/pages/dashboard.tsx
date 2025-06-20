@@ -145,7 +145,7 @@ const Dashboard = () => {
   return (
     <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-        <h1>🎵 VibeMatch Dashboard</h1>
+        <h1>🎵 Aivi Dashboard</h1>
         <button 
           onClick={handleLogout}
           style={{
@@ -220,7 +220,7 @@ const Dashboard = () => {
           {/* Сообщение о недостатке данных */}
           {!hasData && !loading && (
             <div style={{ background: '#fff3cd', border: '1px solid #ffeaa7', padding: '20px', borderRadius: '10px', marginBottom: '20px' }}>
-              <h2>🎵 Добро пожаловать в VibeMatch!</h2>
+              <h2>🎵 Добро пожаловать в Aivi!</h2>
               <p>Похоже, что в вашем Spotify аккаунте пока мало данных для анализа. Вот что можно сделать:</p>
               
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px', marginTop: '20px' }}>
@@ -242,7 +242,7 @@ const Dashboard = () => {
 
               <div style={{ marginTop: '20px', padding: '15px', background: '#f8f9fa', borderRadius: '8px' }}>
                 <h4>🚀 Попробуйте демо-режим</h4>
-                <p>Хотите увидеть, как работает VibeMatch? Мы можем показать пример анализа на основе популярных треков.</p>
+                <p>Хотите увидеть, как работает Aivi? Мы можем показать пример анализа на основе популярных треков.</p>
                 <button 
                   style={{
                     padding: '10px 20px',
