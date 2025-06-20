@@ -9,7 +9,7 @@ const getApiBaseUrl = () => {
   if (import.meta.env.VITE_API_BASE_URL) {
     return import.meta.env.VITE_API_BASE_URL;
   }
-  return "https://429e-37-99-126-69.ngrok-free.app";
+  return "https://b880-95-56-238-194.ngrok-free.app";
 };
 
 export const API_BASE_URL = getApiBaseUrl();
