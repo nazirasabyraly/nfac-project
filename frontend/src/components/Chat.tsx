@@ -24,6 +24,11 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
   const [currentMoodAnalysis, setCurrentMoodAnalysis] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [player, setPlayer] = useState<any>(null);
+  const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [mediaDescription, setMediaDescription] = useState('');
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [showDescriptionInput, setShowDescriptionInput] = useState(false);
 
   const apiBaseUrl = API_BASE_URL;
 
@@ -41,6 +46,34 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
       timestamp: new Date()
     }]);
   }, []);
+
+  // Инициализация Spotify Web Playback SDK
+  useEffect(() => {
+    const token = localStorage.getItem('spotify_token');
+    if (!token || player) return;
+    // @ts-ignore
+    window.onSpotifyWebPlaybackSDKReady = () => {
+      // @ts-ignore
+      const _player = new window.Spotify.Player({
+        name: 'VibeMatch Player',
+        getOAuthToken: cb => { cb(token); },
+        volume: 0.5
+      });
+      _player.addListener('ready', ({ device_id }: any) => {
+        setDeviceId(device_id);
+        console.log('Spotify Player готов, device_id:', device_id);
+      });
+      _player.addListener('not_ready', ({ device_id }: any) => {
+        console.log('Устройство не готово:', device_id);
+      });
+      _player.connect();
+      setPlayer(_player);
+    };
+    // Если SDK уже загружен
+    if ((window as any).Spotify) {
+      (window as any).onSpotifyWebPlaybackSDKReady();
+    }
+  }, [player]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -100,57 +133,65 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    setPendingFile(file);
+    setShowDescriptionInput(true);
+  };
 
-    console.log('📁 Файл выбран:', file.name, 'размер:', file.size, 'тип:', file.type);
-    console.log('🌐 API URL:', apiBaseUrl);
-
+  const handleSendFileWithDescription = async () => {
+    if (!pendingFile) return;
     setUploadingFile(true);
-
+    setShowDescriptionInput(false);
     try {
       // Создаем URL для предварительного просмотра
-      const mediaUrl = URL.createObjectURL(file);
-
+      const mediaUrl = URL.createObjectURL(pendingFile);
       // Добавляем сообщение пользователя с медиа
       const userMessage: Message = {
         id: Date.now().toString(),
         type: 'user',
-        content: `Отправлен файл: ${file.name}`,
+        content: `Отправлен файл: ${pendingFile.name}${mediaDescription ? `\nОписание: ${mediaDescription}` : ''}`,
         timestamp: new Date(),
         mediaUrl
       };
-
       setMessages(prev => [...prev, userMessage]);
-
       // Анализируем медиафайл
       const formData = new FormData();
-      formData.append('file', file);
-
+      formData.append('file', pendingFile);
+      if (mediaDescription) formData.append('description', mediaDescription);
       console.log('🚀 Отправляем запрос на анализ...');
       const analysisResponse = await fetch(`${apiBaseUrl}/chat/analyze-media`, {
         method: 'POST',
         body: formData
       });
-
       console.log('📡 Получен ответ:', analysisResponse.status, analysisResponse.statusText);
-
       const analysisData = await analysisResponse.json();
       console.log('📊 Данные анализа:', analysisData);
-
       if (analysisData.success) {
         setCurrentMoodAnalysis(analysisData);
-
-        // Добавляем сообщение с анализом
+        // Формируем красивый текст анализа
+        let mood = analysisData.mood || (analysisData.description && analysisData.description.mood) || '-';
+        let emotions = analysisData.emotions || (analysisData.description && analysisData.description.emotions) || [];
+        let genre = analysisData.music_genre || (analysisData.description && analysisData.description.music_genre) || '-';
+        let colors = analysisData.colors || (analysisData.description && analysisData.description.colors) || '-';
+        let description = analysisData.description;
+        let caption = analysisData.caption || (typeof description === 'object' && description.caption) || '';
+        // Если description — это объект, берем из него текстовое описание
+        let descriptionText = typeof description === 'object' && description.description ? description.description : (typeof description === 'string' ? description : '');
         const analysisMessage: Message = {
           id: (Date.now() + 1).toString(),
           type: 'ai',
-          content: `🎨 Анализ настроения:\n\n**Настроение:** ${analysisData.mood}\n**Описание:** ${analysisData.description}\n**Эмоции:** ${analysisData.emotions?.join(', ') || 'Не определены'}\n\nТеперь я подберу для тебя музыку!`,
+          content:
+            `<div><strong>🎨 Анализ настроения:</strong></div>` +
+            `<div><b>Настроение:</b> ${mood}</div>` +
+            `<div><b>Эмоции:</b> ${Array.isArray(emotions) ? emotions.join(', ') : emotions || '-'}</div>` +
+            `<div><b>Жанр музыки:</b> ${genre}</div>` +
+            `<div><b>Цвета:</b> ${colors}</div>` +
+            (descriptionText ? `<div><b>Описание:</b> ${descriptionText}</div>` : '') +
+            (caption ? `<div style='margin-top:8px;'><b>💡 Предлагаю описание для вашего поста:</b><br><i>«${caption}»</i></div>` : '') +
+            `<div style='margin-top:8px;'>Теперь я подберу для тебя музыку!</div>`,
           timestamp: new Date(),
           moodAnalysis: analysisData
         };
-
         setMessages(prev => [...prev, analysisMessage]);
-
-        console.log('🎵 Запрашиваем рекомендации...');
         // Получаем рекомендации
         const recommendationsResponse = await fetch(`${apiBaseUrl}/chat/get-recommendations`, {
           method: 'POST',
@@ -162,12 +203,7 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
             user_preferences: userPreferences
           })
         });
-
-        console.log('📡 Получен ответ рекомендаций:', recommendationsResponse.status);
-
         const recommendationsData = await recommendationsResponse.json();
-        console.log('🎵 Данные рекомендаций:', recommendationsData);
-
         if (recommendationsData.success) {
           const recommendations = recommendationsData.recommendations;
           const tracksList = recommendations.recommended_tracks
@@ -175,7 +211,6 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
               `${index + 1}. **${track.name}** - ${track.artist}\n   ${track.reason}`
             )
             .join('\n\n') || 'Рекомендации будут добавлены позже';
-
           const recommendationsMessage: Message = {
             id: (Date.now() + 2).toString(),
             type: 'ai',
@@ -183,11 +218,9 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
             timestamp: new Date(),
             recommendations: recommendations
           };
-
           setMessages(prev => [...prev, recommendationsMessage]);
         }
       } else {
-        console.error('❌ Ошибка анализа:', analysisData.error);
         const errorMessage: Message = {
           id: (Date.now() + 1).toString(),
           type: 'ai',
@@ -197,7 +230,6 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
         setMessages(prev => [...prev, errorMessage]);
       }
     } catch (error) {
-      console.error('❌ Ошибка загрузки файла:', error);
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: 'ai',
@@ -207,6 +239,8 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setUploadingFile(false);
+      setPendingFile(null);
+      setMediaDescription('');
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -225,6 +259,54 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
     return content
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\n/g, '<br>');
+  };
+
+  // Проверка наличия активного устройства Spotify
+  const checkActiveDevice = async () => {
+    const token = localStorage.getItem('spotify_token');
+    if (!token) return false;
+    const res = await fetch('https://api.spotify.com/v1/me/player/devices', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    // Ищем активное устройство типа Computer или Smartphone
+    return data.devices && data.devices.some((d: any) => d.is_active && (d.type === 'Computer' || d.type === 'Smartphone' || d.type === 'Tablet'));
+  };
+
+  // Функция для проигрывания трека с таймкода
+  const playTrack = async (trackId: string, positionMs: number = 0) => {
+    const token = localStorage.getItem('spotify_token');
+    if (!token) {
+      alert('Необходима авторизация Spotify!');
+      return;
+    }
+    if (!deviceId) {
+      alert('Spotify Player не готов. Откройте Spotify на этом устройстве и попробуйте снова.');
+      return;
+    }
+    const isActive = await checkActiveDevice();
+    if (!isActive) {
+      alert('Откройте Spotify-клиент (или web player), выберите устройство "VibeMatch Player" в настройках Spotify и попробуйте снова.');
+      return;
+    }
+    await fetch('https://api.spotify.com/v1/me/player/play?device_id=' + deviceId, {
+      method: 'PUT',
+      body: JSON.stringify({
+        uris: [`spotify:track:${trackId}`],
+        position_ms: positionMs
+      }),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+  };
+
+  const formatTime = (ms?: number) => {
+    if (!ms) return '0:00';
+    const min = Math.floor(ms / 60000);
+    const sec = Math.floor((ms % 60000) / 1000);
+    return `${min}:${sec.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -254,6 +336,38 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
                 className="message-text"
                 dangerouslySetInnerHTML={{ __html: formatMessage(message.content) }}
               />
+              {/* Если есть рекомендации, показываем таблицу треков */}
+              {message.recommendations && message.recommendations.recommended_tracks && (
+                <div style={{ marginTop: 16 }}>
+                  <table style={{ width: '100%', background: '#fff', borderRadius: 8, overflow: 'hidden', fontSize: 14 }}>
+                    <thead>
+                      <tr style={{ background: '#f5f5f5' }}>
+                        <th style={{ padding: 8 }}>Название</th>
+                        <th style={{ padding: 8 }}>Артист</th>
+                        <th style={{ padding: 8 }}>Таймкод</th>
+                        <th style={{ padding: 8 }}>Причина</th>
+                        <th style={{ padding: 8 }}>▶️</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {message.recommendations.recommended_tracks.map((track: any, idx: number) => (
+                        <tr key={track.id || track.uri || idx}>
+                          <td style={{ padding: 8 }}>{track.name}</td>
+                          <td style={{ padding: 8 }}>{track.artist}</td>
+                          <td style={{ padding: 8 }}>{formatTime(track.start_time_ms)}</td>
+                          <td style={{ padding: 8 }}>{track.reason}</td>
+                          <td style={{ padding: 8 }}>
+                            <button onClick={() => playTrack(track.id || (track.uri ? track.uri.split(':').pop() : ''), track.start_time_ms || 0)} style={{ fontSize: 18, background: '#1DB954', color: 'white', border: 'none', borderRadius: 4, padding: '4px 10px', cursor: 'pointer' }}>▶</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
+                    Для проигрывания нужен Spotify Premium и открытый Spotify-клиент
+                  </div>
+                </div>
+              )}
               <div className="message-time">
                 {message.timestamp.toLocaleTimeString()}
               </div>
@@ -293,6 +407,37 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
             {uploadingFile ? '📤 Загрузка...' : '📎 Прикрепить файл'}
           </button>
         </div>
+
+        {/* Окно для ввода описания к медиафайлу */}
+        {showDescriptionInput && (
+          <div style={{ marginBottom: 12, background: '#f8f9fa', padding: 12, borderRadius: 8 }}>
+            <div style={{ marginBottom: 8 }}>Добавьте описание к вашему медиафайлу (необязательно):</div>
+            <input
+              type="text"
+              value={mediaDescription}
+              onChange={e => setMediaDescription(e.target.value)}
+              placeholder="Например: 'Моё настроение сегодня'"
+              style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #ccc', marginBottom: 8 }}
+              disabled={uploadingFile}
+            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={handleSendFileWithDescription}
+                disabled={uploadingFile}
+                style={{ background: '#1DB954', color: 'white', border: 'none', borderRadius: 4, padding: '6px 16px', cursor: 'pointer' }}
+              >
+                Отправить
+              </button>
+              <button
+                onClick={() => { setShowDescriptionInput(false); setPendingFile(null); setMediaDescription(''); }}
+                disabled={uploadingFile}
+                style={{ background: '#eee', color: '#333', border: 'none', borderRadius: 4, padding: '6px 16px', cursor: 'pointer' }}
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="input-section">
           <textarea

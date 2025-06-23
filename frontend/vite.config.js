@@ -9,11 +9,11 @@ export default defineConfig({
     port: 3000,
     strictPort: true,
     // allowedHosts: ['all', '9a9d-95-56-238-194.ngrok-free.app'],
-    allowedHosts: ['plaza-aruba-phil-quarterly.trycloudflare.com'],
+    allowedHosts: ['spend-fragrance-pg-pro.trycloudflare.com '],
     cors: true,
     hmr: {
       clientPort: 443,
-      host: 'plaza-aruba-phil-quarterly.trycloudflare.com'
+      host: 'spend-fragrance-pg-pro.trycloudflare.com'
     }
   },
   preview: {

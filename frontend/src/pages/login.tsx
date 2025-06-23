@@ -97,7 +97,14 @@ const Login = () => {
             >
               {isLoading ? '🔄 Подключение...' : '🎵 Войти через Spotify'}
             </button>
-            
+            <a
+              href="https://accounts.spotify.com/logout"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: '#1DB954', marginTop: 10, display: 'inline-block', textAlign: 'center' }}
+            >
+              Выйти из Spotify (сменить аккаунт)
+            </a>
             <div className="divider">
               <span>или</span>
             </div>

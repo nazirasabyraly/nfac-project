@@ -16,7 +16,7 @@ Base.metadata.create_all(bind=engine)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://plaza-aruba-phil-quarterly.trycloudflare.com",
+        "https://spend-fragrance-pg-pro.trycloudflare.com",
         "http://localhost:3000",
         "https://localhost:3000",
         "http://127.0.0.1:3000",

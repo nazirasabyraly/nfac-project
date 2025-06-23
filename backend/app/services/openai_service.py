@@ -48,6 +48,7 @@ class OpenAIService:
         2. Цветовую палитру и её влияние на настроение
         3. Эмоции, которые передаёт изображение
         4. Музыкальный жанр или стиль, который подошёл бы к этому настроению
+        5. Придумай короткое красивое описание (caption) для поста в соцсетях, отражающее вайб изображения (1-2 предложения, без хэштегов)
         
         Ответь в формате JSON:
         {
@@ -55,7 +56,8 @@ class OpenAIService:
             "emotions": ["список эмоций"],
             "colors": "описание цветов",
             "music_genre": "подходящий музыкальный жанр",
-            "description": "краткое описание вайба"
+            "description": "краткое описание вайба",
+            "caption": "краткое красивое описание для поста"
         }
         """
         
@@ -83,22 +85,37 @@ class OpenAIService:
         try:
             import json
             result = json.loads(content)
-            return {
-                "success": True,
-                "mood": result.get("mood", "neutral"),
-                "emotions": result.get("emotions", []),
-                "colors": result.get("colors", ""),
-                "music_genre": result.get("music_genre", "pop"),
-                "description": result.get("description", ""),
-                "analysis": content
-            }
-        except json.JSONDecodeError:
-            return {
-                "success": True,
-                "mood": "neutral",
-                "description": content,
-                "analysis": content
-            }
+        except Exception:
+            # Если ответ не JSON, пробуем найти JSON внутри строки
+            import re, json
+            match = re.search(r'\{[\s\S]*\}', content)
+            if match:
+                try:
+                    result = json.loads(match.group(0))
+                except Exception:
+                    result = {}
+            else:
+                result = {}
+        # Формируем финальный ответ с отдельными полями
+        mood = result.get("mood", "neutral")
+        emotions = result.get("emotions", [])
+        colors = result.get("colors", "")
+        music_genre = result.get("music_genre", result.get("music_style", "pop"))
+        description = result.get("description", "")
+        caption = result.get("caption")
+        if not caption and description:
+            # Если нет caption, делаем его из description
+            caption = description[:100] + ("..." if len(description) > 100 else "")
+        return {
+            "success": True,
+            "mood": mood,
+            "emotions": emotions,
+            "colors": colors,
+            "music_genre": music_genre,
+            "description": description,
+            "caption": caption,
+            "analysis": content
+        }
     
     async def _analyze_video(self, file_content: bytes, filename: str) -> Dict[str, Any]:
         """
