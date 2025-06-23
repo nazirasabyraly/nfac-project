@@ -15,7 +15,13 @@ Base.metadata.create_all(bind=engine)
 # CORS (разрешаем доступ с фронта)
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"https://.*\.ngrok(-free)?\.app|http://localhost:3000|https://localhost:3000|http://127.0.0.1:3000|https://127.0.0.1:3000",
+    allow_origins=[
+        "https://plaza-aruba-phil-quarterly.trycloudflare.com",
+        "http://localhost:3000",
+        "https://localhost:3000",
+        "http://127.0.0.1:3000",
+        "https://127.0.0.1:3000"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

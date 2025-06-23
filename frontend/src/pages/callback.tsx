@@ -45,7 +45,7 @@ const Callback = () => {
       sessionStorage.setItem('processed_codes', JSON.stringify(processedCodes))
       
       // Отправляем код на backend для обмена на токен
-      fetch(`${API_BASE_URL}/auth/spotify/callback?code=${code}`)
+      fetch(`${API_BASE_URL}/auth/spotify/token?code=${code}`)
         .then(response => {
           console.log('📡 Response status:', response.status)
           console.log('📡 Response headers:', response.headers)

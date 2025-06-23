@@ -89,3 +89,37 @@ async def spotify_callback(code: str = None, error: str = None, db: Session = De
         # Redirect to frontend with error
         return RedirectResponse(f"{FRONTEND_URL}/?error=auth_failed")
 
+@router.get("/spotify/token")
+async def spotify_token(code: str = None, error: str = None, db: Session = Depends(get_db)):
+    from app.config import FRONTEND_URL
+    from fastapi import HTTPException
+
+    if error:
+        raise HTTPException(status_code=400, detail=f"Spotify error: {error}")
+
+    if not code:
+        raise HTTPException(status_code=400, detail="Missing code parameter")
+
+    try:
+        token_data = await exchange_code_for_token(code)
+        access_token = token_data["access_token"]
+        refresh_token = token_data.get("refresh_token")
+        profile = await get_user_profile(access_token)
+        spotify_id = profile.get("id")
+
+        user = db.query(User).filter(User.spotify_id == spotify_id).first()
+
+        if user:
+            auth_service.update_spotify_tokens(db, user.id, spotify_id, access_token, refresh_token)
+        else:
+            print(f"⚠️  Пользователь с Spotify ID {spotify_id} не найден")
+
+        return {
+            "access_token": access_token,
+            "spotify_id": spotify_id
+        }
+
+    except Exception as e:
+        import traceback
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Auth failed: {str(e)}")
