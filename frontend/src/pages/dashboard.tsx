@@ -35,6 +35,13 @@ const Dashboard = () => {
   const [hasData, setHasData] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'analysis' | 'chat'>('analysis')
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light')
+
+  useEffect(() => {
+    document.documentElement.classList.remove('theme-light', 'theme-dark')
+    document.documentElement.classList.add(theme === 'dark' ? 'theme-dark' : 'theme-light')
+    localStorage.setItem('theme', theme)
+  }, [theme])
 
   useEffect(() => {
     // Check for token in URL parameters (from Spotify OAuth redirect)
@@ -135,7 +142,7 @@ const Dashboard = () => {
 
   if (loading) {
     return (
-      <div style={{ textAlign: 'center', marginTop: '20%' }}>
+      <div style={{ textAlign: 'center', minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
         <h2>Загрузка...</h2>
         <p>Анализируем ваш музыкальный вкус ⏳</p>
       </div>
@@ -143,22 +150,31 @@ const Dashboard = () => {
   }
 
   return (
-    <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', width: '100vw', boxSizing: 'border-box', padding: '20px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
         <h1>🎵 Aivi Dashboard</h1>
-        <button 
-          onClick={handleLogout}
-          style={{
-            padding: '10px 20px',
-            background: '#1DB954',
-            color: 'white',
-            border: 'none',
-            borderRadius: '5px',
-            cursor: 'pointer'
-          }}
-        >
-          Выйти
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <button 
+            onClick={handleLogout}
+            style={{
+              padding: '10px 20px',
+              background: '#1DB954',
+              color: 'white',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer'
+            }}
+          >
+            Выйти
+          </button>
+          <button
+            className="theme-toggle-btn"
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            title={theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
+          >
+            {theme === 'dark' ? '🌞' : '🌙'}
+          </button>
+        </div>
       </div>
 
       {/* Табы для переключения */}
@@ -209,7 +225,7 @@ const Dashboard = () => {
         <div>
           {/* Профиль пользователя */}
           {userProfile && (
-            <div style={{ background: '#f5f5f5', padding: '20px', borderRadius: '10px', marginBottom: '20px' }}>
+            <div className="dashboard-block fade-in slide-up" style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '10px', marginBottom: '20px' }}>
               <h2>👤 Профиль</h2>
               <p><strong>Имя:</strong> {userProfile.display_name}</p>
               <p><strong>Email:</strong> {userProfile.email}</p>
@@ -219,85 +235,29 @@ const Dashboard = () => {
 
           {/* Сообщение о недостатке данных */}
           {!hasData && !loading && (
-            <div style={{ background: '#fff3cd', border: '1px solid #ffeaa7', padding: '20px', borderRadius: '10px', marginBottom: '20px' }}>
+            <div className="dashboard-block fade-in slide-up" style={{ background: '#fff3cd', border: '1px solid #ffeaa7', padding: '20px', borderRadius: '10px', marginBottom: '20px', color: '#222', width: '100%' }}>
               <h2>🎵 Добро пожаловать в Aivi!</h2>
               <p>Похоже, что в вашем Spotify аккаунте пока мало данных для анализа. Вот что можно сделать:</p>
-              
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px', marginTop: '20px' }}>
-                <div style={{ background: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #e9ecef' }}>
+                <div style={{ background: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #e9ecef', color: '#222' }}>
                   <h4>🎼 Слушайте больше музыки</h4>
                   <p>Чем больше треков вы слушаете в Spotify, тем точнее будет анализ вашего вкуса.</p>
                 </div>
-                
-                <div style={{ background: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #e9ecef' }}>
+                <div style={{ background: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #e9ecef', color: '#222' }}>
                   <h4>❤️ Лайкайте треки</h4>
                   <p>Ставьте лайки любимым песням, чтобы мы лучше понимали ваши предпочтения.</p>
                 </div>
-                
-                <div style={{ background: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #e9ecef' }}>
+                <div style={{ background: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #e9ecef', color: '#222' }}>
                   <h4>📱 Создавайте плейлисты</h4>
                   <p>Создавайте плейлисты под разные настроения и активности.</p>
                 </div>
-              </div>
-
-              <div style={{ marginTop: '20px', padding: '15px', background: '#f8f9fa', borderRadius: '8px' }}>
-                <h4>🚀 Попробуйте демо-режим</h4>
-                <p>Хотите увидеть, как работает Aivi? Мы можем показать пример анализа на основе популярных треков.</p>
-                <button 
-                  style={{
-                    padding: '10px 20px',
-                    background: '#1DB954',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '5px',
-                    cursor: 'pointer',
-                    marginTop: '10px'
-                  }}
-                  onClick={() => {
-                    // Здесь можно добавить демо-данные
-                    setMusicAnalysis({
-                      mood: {
-                        valence: 0.7,
-                        energy: 0.8,
-                        danceability: 0.6,
-                        tempo: 120
-                      },
-                      preferences: {
-                        favorite_artists: ['The Weeknd', 'Dua Lipa', 'Post Malone', 'Ariana Grande', 'Drake'],
-                        total_tracks_analyzed: 50
-                      },
-                      overall_mood: 'Позитивное'
-                    })
-                    setTopTracks([
-                      {
-                        name: 'Blinding Lights',
-                        artist: 'The Weeknd',
-                        image: 'https://i.scdn.co/image/ab67616d0000b2738863bc11d2aa12b54f5aeb36',
-                        valence: 0.7,
-                        energy: 0.8,
-                        danceability: 0.6
-                      },
-                      {
-                        name: 'Levitating',
-                        artist: 'Dua Lipa',
-                        image: 'https://i.scdn.co/image/ab67616d0000b2738863bc11d2aa12b54f5aeb36',
-                        valence: 0.8,
-                        energy: 0.7,
-                        danceability: 0.8
-                      }
-                    ])
-                    setHasData(true)
-                  }}
-                >
-                  Запустить демо
-                </button>
               </div>
             </div>
           )}
 
           {/* Анализ музыкальных предпочтений */}
           {musicAnalysis && hasData && (
-            <div style={{ background: '#f5f5f5', padding: '20px', borderRadius: '10px', marginBottom: '20px' }}>
+            <div className="dashboard-block fade-in slide-up" style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '10px', marginBottom: '20px' }}>
               <h2>🎼 Анализ музыкального вкуса</h2>
               
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: '15px' }}>
@@ -346,7 +306,7 @@ const Dashboard = () => {
 
           {/* Топ треки */}
           {topTracks.length > 0 && hasData && (
-            <div style={{ background: '#f5f5f5', padding: '20px', borderRadius: '10px', marginBottom: '20px' }}>
+            <div className="dashboard-block fade-in slide-up" style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '10px', marginBottom: '20px' }}>
               <h2>🔥 Ваши топ треки</h2>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px' }}>
                 {topTracks.map((track, index) => (
@@ -375,7 +335,7 @@ const Dashboard = () => {
 
           {/* Ошибка */}
           {error && (
-            <div style={{ background: '#f8d7da', border: '1px solid #f5c6cb', padding: '20px', borderRadius: '10px', marginBottom: '20px' }}>
+            <div className="dashboard-block fade-in slide-up" style={{ background: '#f8d7da', border: '1px solid #f5c6cb', padding: '20px', borderRadius: '10px', marginBottom: '20px', color: '#b30000', width: '100%' }}>
               <h3>❌ Ошибка</h3>
               <p>{error}</p>
             </div>

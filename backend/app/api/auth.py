@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 from app.services.spotify import (
     get_spotify_auth_url,
     exchange_code_for_token,
-    get_user_profile
+    get_user_profile,
+    SpotifyAuthError
 )
 from app.config import FRONTEND_URL
 from ..database import get_db
@@ -81,6 +82,11 @@ async def spotify_callback(code: str = None, error: str = None, db: Session = De
         print(f"🔄 Redirecting to: {redirect_url}")
         return RedirectResponse(redirect_url)
 
+    except SpotifyAuthError as e:
+        print(f"❌ Spotify auth error in spotify_callback: {str(e)}")
+        import traceback
+        print(f"❌ Traceback: {traceback.format_exc()}")
+        return RedirectResponse(f"{FRONTEND_URL}/?error=spotify_auth&message={str(e)}")
     except Exception as e:
         print(f"❌ Error in spotify_callback: {str(e)}")
         print(f"❌ Error type: {type(e).__name__}")
@@ -119,6 +125,10 @@ async def spotify_token(code: str = None, error: str = None, db: Session = Depen
             "spotify_id": spotify_id
         }
 
+    except SpotifyAuthError as e:
+        import traceback
+        print(traceback.format_exc())
+        raise HTTPException(status_code=401, detail=f"Spotify auth error: {str(e)}")
     except Exception as e:
         import traceback
         print(traceback.format_exc())

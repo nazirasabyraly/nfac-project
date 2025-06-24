@@ -49,10 +49,10 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
 
   // Инициализация Spotify Web Playback SDK
   useEffect(() => {
-    const token = localStorage.getItem('spotify_token');
-    if (!token || player) return;
-    // @ts-ignore
-    window.onSpotifyWebPlaybackSDKReady = () => {
+    // Определяем функцию до загрузки скрипта
+    (window as any).onSpotifyWebPlaybackSDKReady = () => {
+      const token = localStorage.getItem('spotify_token');
+      if (!token || player) return;
       // @ts-ignore
       const _player = new window.Spotify.Player({
         name: 'VibeMatch Player',
@@ -69,10 +69,18 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
       _player.connect();
       setPlayer(_player);
     };
-    // Если SDK уже загружен
-    if ((window as any).Spotify) {
+    // Динамически подключаем скрипт, если ещё не подключён
+    if (!document.getElementById('spotify-sdk')) {
+      const script = document.createElement('script');
+      script.id = 'spotify-sdk';
+      script.src = 'https://sdk.scdn.co/spotify-player.js';
+      script.async = true;
+      document.body.appendChild(script);
+    } else if ((window as any).Spotify) {
+      // Если SDK уже загружен
       (window as any).onSpotifyWebPlaybackSDKReady();
     }
+    // eslint-disable-next-line
   }, [player]);
 
   const scrollToBottom = () => {

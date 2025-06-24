@@ -1,11 +1,12 @@
 // src/pages/Callback.tsx
 
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../config'
 
 const Callback = () => {
   const navigate = useNavigate()
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     console.log('🔍 Callback page loaded')
@@ -13,19 +14,17 @@ const Callback = () => {
     
     const params = new URLSearchParams(window.location.search)
     const code = params.get('code')
-    const error = params.get('error')
+    const errorParam = params.get('error')
     const state = params.get('state')
 
     console.log('📋 URL Parameters:')
     console.log('- code:', code ? 'present' : 'missing')
-    console.log('- error:', error)
+    console.log('- error:', errorParam)
     console.log('- state:', state)
     console.log('- all params:', Object.fromEntries(params.entries()))
 
-    if (error) {
-      console.error('❌ Spotify error:', error)
-      alert(`Ошибка авторизации: ${error}`)
-      navigate('/')
+    if (errorParam) {
+      setError('Доступ к Spotify не был предоставлен. Пожалуйста, попробуйте снова и подтвердите все права.')
       return
     }
 
@@ -54,7 +53,7 @@ const Callback = () => {
             return response.json()
           }
           return response.text().then(text => {
-            console.error('❌ Response text:', text)
+            setError('Ошибка авторизации Spotify. Пожалуйста, попробуйте снова.')
             throw new Error(`HTTP ${response.status}: ${text}`)
           })
         })
@@ -66,14 +65,13 @@ const Callback = () => {
             console.log('💾 Token saved to localStorage')
             navigate('/dashboard')
           } else {
-            console.error('❌ No access_token in response:', data)
+            setError('Токен не получен. Попробуйте снова.')
             throw new Error('Токен не получен')
           }
         })
         .catch(error => {
           console.error('❌ Fetch error:', error)
-          alert(`Не удалось получить токен: ${error.message}`)
-          navigate('/')
+          // setError('Ошибка авторизации Spotify. Попробуйте войти снова.')
         })
     } else {
       console.error('❌ No code parameter found')
@@ -82,13 +80,25 @@ const Callback = () => {
     }
   }, [navigate])
 
+  if (error) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+        <h2>Ошибка авторизации Spotify</h2>
+        <p>{error}</p>
+        <button
+          style={{ marginTop: 24, padding: '12px 32px', fontSize: 18, borderRadius: 8, background: '#1DB954', color: '#fff', border: 'none', cursor: 'pointer' }}
+          onClick={() => navigate('/')}
+        >
+          Попробовать снова
+        </button>
+      </div>
+    )
+  }
+
   return (
-    <div style={{ textAlign: 'center', marginTop: '20%' }}>
-      <h2>Авторизация...</h2>
-      <p>Подключаем Spotify. Подождите ⏳</p>
-      <p style={{ fontSize: '12px', color: '#666' }}>
-        Откройте консоль разработчика (F12) для отладки
-      </p>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+      <h2>Завершаем авторизацию Spotify...</h2>
+      <p>Пожалуйста, подождите ⏳</p>
     </div>
   )
 }

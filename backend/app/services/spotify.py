@@ -10,17 +10,22 @@ from urllib.parse import urlencode
 
 SPOTIFY_API_BASE = "https://api.spotify.com/v1"
 
-
+class SpotifyAuthError(Exception):
+    pass
 
 async def get_user_profile(access_token: str):
     """Получает профиль пользователя Spotify"""
     headers = {
         'Authorization': f'Bearer {access_token}'
     }
-    
-    response = requests.get('https://api.spotify.com/v1/me', headers=headers)
-    response.raise_for_status()
-    
+    async with httpx.AsyncClient() as client:
+        response = await client.get('https://api.spotify.com/v1/me', headers=headers)
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            if response.status_code in (401, 403):
+                raise SpotifyAuthError(f"Spotify auth error: {response.status_code} {response.text}")
+            raise
     return response.json()
 
 def get_spotify_auth_url():
@@ -29,7 +34,8 @@ def get_spotify_auth_url():
         'client_id': SPOTIFY_CLIENT_ID,
         'response_type': 'code',
         'redirect_uri': SPOTIFY_REDIRECT_URI,
-        'scope': 'user-top-read user-read-recently-played user-read-private user-read-email playlist-read-private user-library-read'
+        'scope': 'user-top-read user-read-recently-played user-read-private user-read-email playlist-read-private user-library-read',
+        'show_dialog': 'true'
     }
     
     auth_url = f"https://accounts.spotify.com/authorize?{urlencode(params)}"

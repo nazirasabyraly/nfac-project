@@ -21,11 +21,11 @@ const Login = () => {
     
     try {
       // Прямой редирект на Spotify OAuth
-      const scope = "user-top-read user-read-recently-played user-read-private user-read-email playlist-read-private user-library-read"
+      const scope = "user-top-read user-read-recently-played user-read-private user-read-email playlist-read-private user-library-read streaming user-modify-playback-state user-read-playback-state"
       const clientId = "a95c13aa064c44a4affeea5627147ca1" // Spotify Client ID
       const redirectUri = import.meta.env.VITE_SPOTIFY_REDIRECT_URI
       
-      const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}`
+      const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&show_dialog=true`
       
       window.location.href = authUrl
     } catch (error) {
@@ -105,6 +105,22 @@ const Login = () => {
             >
               Выйти из Spotify (сменить аккаунт)
             </a>
+            <button
+              type="button"
+              style={{ marginTop: 10, background: '#eee', color: '#333', border: '1px solid #ccc', borderRadius: 4, padding: '8px 12px', cursor: 'pointer', width: '100%' }}
+              onClick={() => {
+                // Очищаем localStorage
+                localStorage.clear();
+                // Очищаем cookies
+                document.cookie.split(';').forEach(function(c) {
+                  document.cookie = c.replace(/^ +/, '').replace(/=.*/, '=;expires=' + new Date().toUTCString() + ';path=/');
+                });
+                // Перенаправляем на logout Spotify
+                window.location.href = 'https://accounts.spotify.com/logout';
+              }}
+            >
+              Выйти полностью (очистить все токены)
+            </button>
             <div className="divider">
               <span>или</span>
             </div>
