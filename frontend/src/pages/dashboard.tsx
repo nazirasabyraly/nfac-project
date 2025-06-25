@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { API_BASE_URL } from '../config'
 import Chat from '../components/Chat'
+import { useTranslation } from 'react-i18next'
 
 interface MusicAnalysis {
   mood: {
@@ -28,6 +29,7 @@ interface Track {
 
 const Dashboard = () => {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const [userProfile, setUserProfile] = useState<any>(null)
   const [musicAnalysis, setMusicAnalysis] = useState<MusicAnalysis | null>(null)
   const [topTracks, setTopTracks] = useState<Track[]>([])
@@ -143,17 +145,16 @@ const Dashboard = () => {
   if (loading) {
     return (
       <div style={{ textAlign: 'center', minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-        <h2>Загрузка...</h2>
-        <p>Анализируем ваш музыкальный вкус ⏳</p>
+        <h2>{t('loading')}</h2>
+        <p>{t('analyzing_music')}</p>
       </div>
     )
   }
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', width: '100vw', boxSizing: 'border-box', padding: '20px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-        <h1>🎵 Aivi Dashboard</h1>
-        <div style={{ display: 'flex', alignItems: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button 
             onClick={handleLogout}
             style={{
@@ -165,12 +166,12 @@ const Dashboard = () => {
               cursor: 'pointer'
             }}
           >
-            Выйти
+            {t('logout')}
           </button>
           <button
             className="theme-toggle-btn"
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            title={theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
+            title={theme === 'dark' ? t('light_theme') : t('dark_theme')}
           >
             {theme === 'dark' ? '🌞' : '🌙'}
           </button>
@@ -200,7 +201,7 @@ const Dashboard = () => {
             transition: 'all 0.2s ease'
           }}
         >
-          📊 Анализ музыки
+          📊 {t('music_analysis')}
         </button>
         <button
           onClick={() => setActiveTab('chat')}
@@ -216,7 +217,7 @@ const Dashboard = () => {
             transition: 'all 0.2s ease'
           }}
         >
-          🤖 ИИ-чат
+          🤖 {t('ai_chat')}
         </button>
       </div>
 
@@ -226,30 +227,30 @@ const Dashboard = () => {
           {/* Профиль пользователя */}
           {userProfile && (
             <div className="dashboard-block fade-in slide-up" style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '10px', marginBottom: '20px' }}>
-              <h2>👤 Профиль</h2>
-              <p><strong>Имя:</strong> {userProfile.display_name}</p>
+              <h2>👤 {t('profile')}</h2>
+              <p><strong>{t('name')}:</strong> {userProfile.display_name}</p>
               <p><strong>Email:</strong> {userProfile.email}</p>
-              <p><strong>Страна:</strong> {userProfile.country}</p>
+              <p><strong>{t('country')}:</strong> {userProfile.country}</p>
             </div>
           )}
 
           {/* Сообщение о недостатке данных */}
           {!hasData && !loading && (
             <div className="dashboard-block fade-in slide-up" style={{ background: '#fff3cd', border: '1px solid #ffeaa7', padding: '20px', borderRadius: '10px', marginBottom: '20px', color: '#222', width: '100%' }}>
-              <h2>🎵 Добро пожаловать в Aivi!</h2>
-              <p>Похоже, что в вашем Spotify аккаунте пока мало данных для анализа. Вот что можно сделать:</p>
+              <h2>🎵 {t('welcome')}</h2>
+              <p>{t('not_enough_data')}</p>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px', marginTop: '20px' }}>
                 <div style={{ background: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #e9ecef', color: '#222' }}>
-                  <h4>🎼 Слушайте больше музыки</h4>
-                  <p>Чем больше треков вы слушаете в Spotify, тем точнее будет анализ вашего вкуса.</p>
+                  <h4>🎼 {t('listen_more_music')}</h4>
+                  <p>{t('listen_more_music_desc')}</p>
                 </div>
                 <div style={{ background: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #e9ecef', color: '#222' }}>
-                  <h4>❤️ Лайкайте треки</h4>
-                  <p>Ставьте лайки любимым песням, чтобы мы лучше понимали ваши предпочтения.</p>
+                  <h4>❤️ {t('like_tracks')}</h4>
+                  <p>{t('like_tracks_desc')}</p>
                 </div>
                 <div style={{ background: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #e9ecef', color: '#222' }}>
-                  <h4>📱 Создавайте плейлисты</h4>
-                  <p>Создавайте плейлисты под разные настроения и активности.</p>
+                  <h4>📱 {t('create_playlists')}</h4>
+                  <p>{t('create_playlists_desc')}</p>
                 </div>
               </div>
             </div>
@@ -258,95 +259,77 @@ const Dashboard = () => {
           {/* Анализ музыкальных предпочтений */}
           {musicAnalysis && hasData && (
             <div className="dashboard-block fade-in slide-up" style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '10px', marginBottom: '20px' }}>
-              <h2>🎼 Анализ музыкального вкуса</h2>
-              
+              <h2>🎼 {t('music_analysis')}</h2>
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: '15px' }}>
                 <span style={{ fontSize: '24px', marginRight: '10px' }}>
                   {getMoodEmoji(musicAnalysis.overall_mood)}
                 </span>
-                <h3>Общее настроение: {musicAnalysis.overall_mood}</h3>
+                <h3>{t('overall_mood')}: {musicAnalysis.overall_mood}</h3>
               </div>
-
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '20px' }}>
                 <div style={{ background: 'white', padding: '15px', borderRadius: '8px' }}>
-                  <h4>😊 Позитивность</h4>
+                  <h4>😊 {t('positivity')}</h4>
                   <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#1DB954' }}>
                     {formatPercentage(musicAnalysis.mood.valence)}%
                   </p>
                 </div>
                 <div style={{ background: 'white', padding: '15px', borderRadius: '8px' }}>
-                  <h4>⚡ Энергичность</h4>
+                  <h4>⚡️ {t('energy')}</h4>
                   <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#1DB954' }}>
                     {formatPercentage(musicAnalysis.mood.energy)}%
                   </p>
                 </div>
                 <div style={{ background: 'white', padding: '15px', borderRadius: '8px' }}>
-                  <h4>💃 Танцевальность</h4>
+                  <h4>💃 {t('danceability')}</h4>
                   <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#1DB954' }}>
                     {formatPercentage(musicAnalysis.mood.danceability)}%
                   </p>
                 </div>
                 <div style={{ background: 'white', padding: '15px', borderRadius: '8px' }}>
-                  <h4>🎵 Темп</h4>
+                  <h4>🎵 {t('tempo')}</h4>
                   <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#1DB954' }}>
-                    {Math.round(musicAnalysis.mood.tempo)} BPM
+                    {musicAnalysis.mood.tempo}
                   </p>
                 </div>
               </div>
-
-              <div style={{ background: 'white', padding: '15px', borderRadius: '8px' }}>
-                <h4>🎤 Любимые исполнители</h4>
-                <p>{musicAnalysis.preferences.favorite_artists.slice(0, 5).join(', ')}</p>
-                <p style={{ fontSize: '12px', color: '#666' }}>
-                  Проанализировано треков: {musicAnalysis.preferences.total_tracks_analyzed}
-                </p>
+              <div style={{ marginBottom: '15px' }}>
+                <h4>🎤 {t('favorite_artists')}</h4>
+                <ul>
+                  {musicAnalysis.preferences.favorite_artists.map((artist, idx) => (
+                    <li key={idx}>{artist}</li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <h4>🎧 {t('total_tracks_analyzed')}: {musicAnalysis.preferences.total_tracks_analyzed}</h4>
               </div>
             </div>
           )}
 
           {/* Топ треки */}
-          {topTracks.length > 0 && hasData && (
+          {topTracks.length > 0 && (
             <div className="dashboard-block fade-in slide-up" style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '10px', marginBottom: '20px' }}>
-              <h2>🔥 Ваши топ треки</h2>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px' }}>
-                {topTracks.map((track, index) => (
-                  <div key={index} style={{ background: 'white', padding: '15px', borderRadius: '8px', display: 'flex', alignItems: 'center' }}>
-                    {track.image && (
-                      <img 
-                        src={track.image} 
-                        alt={track.name}
-                        style={{ width: '60px', height: '60px', borderRadius: '5px', marginRight: '15px' }}
-                      />
-                    )}
-                    <div>
-                      <h4 style={{ margin: '0 0 5px 0' }}>{track.name}</h4>
-                      <p style={{ margin: '0', color: '#666' }}>{track.artist}</p>
-                      <div style={{ fontSize: '12px', color: '#999', marginTop: '5px' }}>
-                        <span>😊 {formatPercentage(track.valence)}%</span> • 
-                        <span>⚡ {formatPercentage(track.energy)}%</span> • 
-                        <span>💃 {formatPercentage(track.danceability)}%</span>
-                      </div>
-                    </div>
+              <h2>🎵 {t('top_tracks')}</h2>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px' }}>
+                {topTracks.map((track, idx) => (
+                  <div key={idx} style={{ background: 'white', borderRadius: '8px', padding: '10px', minWidth: '180px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+                    <img src={track.image} alt={track.name} style={{ width: '100%', borderRadius: '6px', marginBottom: '8px' }} />
+                    <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>{track.name}</div>
+                    <div style={{ color: '#888', marginBottom: '4px' }}>{track.artist}</div>
+                    <div style={{ fontSize: '12px', color: '#555' }}>{t('positivity')}: {formatPercentage(track.valence)}%</div>
+                    <div style={{ fontSize: '12px', color: '#555' }}>{t('energy')}: {formatPercentage(track.energy)}%</div>
+                    <div style={{ fontSize: '12px', color: '#555' }}>{t('danceability')}: {formatPercentage(track.danceability)}%</div>
                   </div>
                 ))}
               </div>
             </div>
           )}
-
-          {/* Ошибка */}
-          {error && (
-            <div className="dashboard-block fade-in slide-up" style={{ background: '#f8d7da', border: '1px solid #f5c6cb', padding: '20px', borderRadius: '10px', marginBottom: '20px', color: '#b30000', width: '100%' }}>
-              <h3>❌ Ошибка</h3>
-              <p>{error}</p>
-            </div>
-          )}
         </div>
       )}
 
+      {/* Чат */}
       {activeTab === 'chat' && (
-        <div style={{ height: 'calc(100vh - 200px)', minHeight: '500px' }}>
-          <Chat userPreferences={musicAnalysis} />
-        </div>
+        <Chat />
       )}
     </div>
   )

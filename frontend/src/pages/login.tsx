@@ -4,9 +4,11 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './login.css'
 import { API_BASE_URL } from '../config'
+import { useTranslation } from 'react-i18next'
 
 const Login = () => {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [username, setUsername] = useState('')
@@ -85,7 +87,7 @@ const Login = () => {
       <div className="login-card">
         <div className="login-header">
           <h1>🎵 Aivi</h1>
-          <p>Анализ музыкального вкуса и ИИ-помощник</p>
+          <p>{t('welcome')}</p>
         </div>
 
         {!showManualLogin ? (
@@ -95,7 +97,7 @@ const Login = () => {
               disabled={isLoading}
               className="spotify-login-btn"
             >
-              {isLoading ? '🔄 Подключение...' : '🎵 Войти через Spotify'}
+              {isLoading ? t('loading') : t('login_spotify')}
             </button>
             <a
               href="https://accounts.spotify.com/logout"
@@ -103,7 +105,7 @@ const Login = () => {
               rel="noopener noreferrer"
               style={{ color: '#1DB954', marginTop: 10, display: 'inline-block', textAlign: 'center' }}
             >
-              Выйти из Spotify (сменить аккаунт)
+              {t('logout_spotify')}
             </a>
             <button
               type="button"
@@ -119,30 +121,30 @@ const Login = () => {
                 window.location.href = 'https://accounts.spotify.com/logout';
               }}
             >
-              Выйти полностью (очистить все токены)
+              {t('logout_full')}
             </button>
             <div className="divider">
-              <span>или</span>
+              <span>{t('or')}</span>
             </div>
             
             <button
               onClick={() => setShowManualLogin(true)}
               className="manual-login-btn"
             >
-              📧 Регистрация / Вход
+              {t('register_login')}
             </button>
           </div>
         ) : (
           <form onSubmit={handleManualAuth} className="login-form">
             {isRegistering && (
               <div className="form-group">
-                <label htmlFor="username">Имя пользователя</label>
+                <label htmlFor="username">{t('username')}</label>
                 <input
                   type="text"
                   id="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Введите имя пользователя"
+                  placeholder={t('enter_username')}
                   required
                 />
               </div>
@@ -161,13 +163,13 @@ const Login = () => {
             </div>
             
             <div className="form-group">
-              <label htmlFor="password">Пароль</label>
+              <label htmlFor="password">{t('password')}</label>
               <input
                 type="password"
                 id="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Введите пароль"
+                placeholder={t('enter_password')}
                 required
               />
             </div>
@@ -180,7 +182,7 @@ const Login = () => {
                 disabled={isLoading}
                 className="login-submit-btn"
               >
-                {isLoading ? '🔄 Обработка...' : (isRegistering ? 'Зарегистрироваться' : 'Войти')}
+                {isLoading ? t('processing') : (isRegistering ? t('register') : t('login'))}
               </button>
               
               <button
@@ -188,7 +190,7 @@ const Login = () => {
                 onClick={() => setIsRegistering(!isRegistering)}
                 className="toggle-btn"
               >
-                {isRegistering ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Зарегистрироваться'}
+                {isRegistering ? t('already_have_account') : t('no_account')}
               </button>
               
               <button
@@ -196,20 +198,20 @@ const Login = () => {
                 onClick={() => setShowManualLogin(false)}
                 className="back-btn"
               >
-                ← Назад
+                ← {t('back')}
               </button>
             </div>
           </form>
         )}
 
         <div className="login-info">
-          <h3>🚀 Что умеет Aivi?</h3>
+          <h3>🚀 {t('what_can_do')}</h3>
           <ul>
-            <li>📊 Анализ вашего музыкального вкуса</li>
-            <li>🤖 ИИ-чат для анализа фото/видео</li>
-            <li>🎵 Подбор музыки под ваш контент</li>
-            <li>📱 Современный интерфейс</li>
-            <li>🔐 Безопасная регистрация и вход</li>
+            <li>📊 {t('analyze_music')}</li>
+            <li>🤖 {t('ai_chat')}</li>
+            <li>🎵 {t('music_recommend')}</li>
+            <li>📱 {t('modern_ui')}</li>
+            <li>🔐 {t('secure_login')}</li>
           </ul>
         </div>
       </div>

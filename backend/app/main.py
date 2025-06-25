@@ -16,7 +16,7 @@ Base.metadata.create_all(bind=engine)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://bite-decreased-funny-draft.trycloudflare.com",
+        "https://joy-brian-behaviour-amanda.trycloudflare.com",
         "http://localhost:3000",
         "https://localhost:3000",
         "http://127.0.0.1:3000",

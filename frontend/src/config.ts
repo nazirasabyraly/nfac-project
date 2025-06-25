@@ -9,7 +9,7 @@ const getApiBaseUrl = () => {
   if (import.meta.env.VITE_API_BASE_URL) {
     return import.meta.env.VITE_API_BASE_URL;
   }
-  return "https://echo-instead-nights-incl.trycloudflare.com";
+  return "https://assembly-dp-rachel-produces.trycloudflare.com";
 };
 
 export const API_BASE_URL = getApiBaseUrl();

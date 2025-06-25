@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { API_BASE_URL } from '../config';
 import './Chat.css';
+import { useTranslation } from 'react-i18next';
 
 interface Message {
   id: string;
@@ -16,7 +17,14 @@ interface ChatProps {
   userPreferences?: any;
 }
 
+const AI_LANGUAGES = [
+  { code: 'ru', label: 'Русский', prompt: 'Пожалуйста, отвечай мне только на русском языке.' },
+  { code: 'en', label: 'English', prompt: 'Please reply to the user only in English.' },
+  { code: 'kz', label: 'Қазақша', prompt: 'Пайдаланушыға тек қазақ тілінде жауап бер.' },
+];
+
 const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
+  const { t } = useTranslation();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -29,6 +37,8 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
   const [mediaDescription, setMediaDescription] = useState('');
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [showDescriptionInput, setShowDescriptionInput] = useState(false);
+  const [aiLang, setAiLang] = useState(() => localStorage.getItem('ai_lang') || 'ru');
+  const aiLangObj = AI_LANGUAGES.find(l => l.code === aiLang) || AI_LANGUAGES[0];
 
   const apiBaseUrl = API_BASE_URL;
 
@@ -42,10 +52,15 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
     setMessages([{
       id: '1',
       type: 'ai',
-      content: 'Привет! Я твой музыкальный помощник. Отправь мне фото или видео, и я проанализирую настроение и подберу подходящую музыку! 🎵',
+      content:
+        aiLang === 'en'
+          ? "Hello! I'm your music assistant. Send me a photo or video, and I'll analyze the mood and suggest suitable music! 🎵"
+          : aiLang === 'kz'
+          ? "Сәлем! Мен сенің музыкалық көмекшіңмін. Маған фото немесе видео жібер, мен көңіл-күйді талдап, лайықты музыка ұсынамын! 🎵"
+          : "Привет! Я твой музыкальный помощник. Отправь мне фото или видео, и я проанализирую настроение и подберу подходящую музыку! 🎵",
       timestamp: new Date()
     }]);
-  }, []);
+  }, [aiLang]);
 
   // Инициализация Spotify Web Playback SDK
   useEffect(() => {
@@ -109,7 +124,8 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
         },
         body: JSON.stringify({
           message: inputMessage,
-          mood_analysis: currentMoodAnalysis
+          mood_analysis: currentMoodAnalysis,
+          system_prompt: aiLangObj.prompt
         })
       });
 
@@ -320,11 +336,31 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
   return (
     <div className="chat-container">
       <div className="chat-header">
-        <h3>🎵 Музыкальный ИИ-помощник</h3>
-        <p>Отправь фото или видео для анализа настроения</p>
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontWeight: 600, fontSize: 18 }}>{t('ai_helper_title')}</div>
+          <div style={{ color: '#fff', fontSize: 14, marginTop: 2 }}>
+            🎬 {t('ai_helper_subtitle')}
+          </div>
+        </div>
       </div>
 
       <div className="chat-messages">
+        <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span role="img" aria-label="lang">🌐</span>
+          <span style={{ fontWeight: 500 }}>{t('ai_lang_label')}</span>
+          <select
+            value={aiLang}
+            onChange={e => {
+              setAiLang(e.target.value);
+              localStorage.setItem('ai_lang', e.target.value);
+            }}
+            style={{ padding: '4px 8px', borderRadius: 4 }}
+          >
+            {AI_LANGUAGES.map(l => (
+              <option key={l.code} value={l.code}>{l.label}</option>
+            ))}
+          </select>
+        </div>
         {messages.map((message) => (
           <div key={message.id} className={`message ${message.type}`}>
             <div className="message-content">
