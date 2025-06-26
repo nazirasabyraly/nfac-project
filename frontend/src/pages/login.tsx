@@ -52,7 +52,6 @@ const Login = () => {
         setError(data.detail || 'Ошибка аутентификации')
       }
     } catch (error) {
-      console.error('Error:', error)
       setError('Ошибка подключения к серверу')
     } finally {
       setIsLoading(false)

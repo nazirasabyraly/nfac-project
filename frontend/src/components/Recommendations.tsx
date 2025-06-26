@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { API_BASE_URL } from '../config';
 import { useTranslation } from 'react-i18next';
+import AudioWithCache from './AudioWithCache';
 
 interface YouTubeVideo {
   video_id: string;
@@ -96,15 +97,21 @@ const Recommendations: React.FC = () => {
         {results.map(video => (
           <div key={video.video_id} style={{ background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.04)', padding: 16, display: 'flex', gap: 20 }}>
             <div>
-              <iframe
-                width="220"
-                height="124"
-                src={`https://www.youtube.com/embed/${video.video_id}`}
-                title={video.title}
-                frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                style={{ borderRadius: 8 }}
+              {typeof window !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod|Opera Mini|IEMobile/i.test(navigator.userAgent) ? null : (
+                <iframe
+                  width="220"
+                  height="124"
+                  src={`https://www.youtube.com/embed/${video.video_id}`}
+                  title={video.title}
+                  frameBorder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  style={{ borderRadius: 8 }}
+                />
+              )}
+              <AudioWithCache
+                src={`${API_BASE_URL}/recommend/youtube-audio?video_id=${video.video_id}`}
+                style={{ marginTop: 8, width: 220 }}
               />
             </div>
             <div style={{ flex: 1 }}>

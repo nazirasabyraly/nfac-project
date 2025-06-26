@@ -15,7 +15,6 @@ class UserLogin(BaseModel):
 
 class User(UserBase):
     id: int
-    spotify_id: Optional[str] = None
     created_at: datetime
     is_active: bool
 
@@ -58,4 +57,12 @@ class ChatMessageCreate(ChatMessageBase):
 class ChatMessageOut(ChatMessageBase):
     id: int
     class Config:
-        orm_mode = True 
+        orm_mode = True
+
+class GenerateBeatRequest(BaseModel):
+    prompt: str
+
+class GenerateBeatResponse(BaseModel):
+    success: bool
+    audio_url: Optional[str] = None
+    error: Optional[str] = None 

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, status
 from fastapi.responses import JSONResponse
 from typing import Dict, Any, List
 import json
@@ -8,13 +8,18 @@ from ..dependencies import get_current_user
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.user import SavedSong, User, ChatMessage
-from ..schemas import ChatMessageCreate, ChatMessageOut
+from ..schemas import ChatMessageCreate, ChatMessageOut, GenerateBeatRequest, GenerateBeatResponse
 import asyncio
+import os
+import requests
 
 router = APIRouter(tags=["chat"])
 
 # Инициализируем сервисы
 openai_service = OpenAIService()
+
+AUDIO_CACHE_DIR = "audio_cache"
+os.makedirs(AUDIO_CACHE_DIR, exist_ok=True)
 
 @router.post("/analyze-media")
 async def analyze_media(
@@ -80,20 +85,34 @@ async def get_music_recommendations(
             "top_artists": list({s.artist for s in saved_songs if s.artist}),
             "top_tracks": list({s.title for s in saved_songs if s.title})
         } if saved_songs else global_prefs
-        # PROMPT: просим ровно 5 треков
+        print(f"[RECOMMEND] mood_analysis: {mood_analysis}")
+        print(f"[RECOMMEND] personal_prefs: {personal_prefs}")
         try:
+            print("[RECOMMEND] Запрашиваем рекомендации у OpenAI...")
             global_task = openai_service.get_music_recommendations(mood_analysis, global_prefs, n_tracks=5)
             personal_task = openai_service.get_music_recommendations(mood_analysis, personal_prefs, n_tracks=5)
             global_rec, personal_rec = await asyncio.wait_for(
                 asyncio.gather(global_task, personal_task), timeout=40.0
             )
+            print(f"[RECOMMEND] Ответ OpenAI: global={global_rec}, personal={personal_rec}")
+            return JSONResponse(content={
+                "global": global_rec["recommendations"],
+                "personal": personal_rec["recommendations"],
+                "ask_feedback": True
+            })
         except asyncio.TimeoutError:
-            return JSONResponse(status_code=504, content={"error": "AI recommendations timeout. Попробуйте ещё раз."})
-        return JSONResponse(content={
-            "global": global_rec["recommendations"],
-            "personal": personal_rec["recommendations"]
-        })
+            print("[RECOMMEND] Timeout от OpenAI! Возвращаем заглушку.")
+            dummy_tracks = [
+                {"name": "Test Track 1", "artist": "Test Artist", "reason": "Заглушка: сервис недоступен"},
+                {"name": "Test Track 2", "artist": "Test Artist", "reason": "Заглушка: сервис недоступен"}
+            ]
+            return JSONResponse(content={
+                "global": {"recommended_tracks": dummy_tracks, "explanation": "AI timeout. Показываем тестовые треки.", "alternative_genres": ["pop"]},
+                "personal": {"recommended_tracks": dummy_tracks, "explanation": "AI timeout. Показываем тестовые треки.", "alternative_genres": ["pop"]},
+                "ask_feedback": True
+            })
     except Exception as e:
+        print(f"[RECOMMEND] Ошибка получения рекомендаций: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка получения рекомендаций: {str(e)}")
 
 @router.post("/chat")
@@ -166,4 +185,54 @@ def add_chat_message(msg: ChatMessageCreate, db: Session = Depends(get_db), curr
     db.add(db_msg)
     db.commit()
     db.refresh(db_msg)
-    return db_msg 
+    return db_msg
+
+@router.delete('/history', status_code=status.HTTP_204_NO_CONTENT)
+def delete_chat_history(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    db.query(ChatMessage).filter(ChatMessage.user_id == current_user.id).delete()
+    db.commit()
+    return None
+
+@router.post("/generate-beat", response_model=GenerateBeatResponse)
+async def generate_beat(request: GenerateBeatRequest):
+    """
+    Генерирует музыку через Riffusion API по текстовому промпту.
+    """
+    try:
+        prompt = request.prompt
+        # --- Riffusion API параметры ---
+        RIFFUSION_API_KEY = os.getenv("RIFFUSION_API_KEY")
+        if not RIFFUSION_API_KEY:
+            return GenerateBeatResponse(success=False, error="RIFFUSION_API_KEY не задан в переменных окружения")
+        url = "https://riffusionapi.com/api/generate-music"
+        headers = {
+            "accept": "application/json",
+            "x-api-key": RIFFUSION_API_KEY,
+            "Content-Type": "application/json"
+        }
+        data = {
+            "prompt": prompt,
+            "duration": 60,  # секунд, можно варьировать
+            "quality": "standard"
+        }
+        resp = requests.post(url, headers=headers, json=data, timeout=120)
+        if resp.status_code != 200:
+            return GenerateBeatResponse(success=False, error=f"Riffusion API error: {resp.text}")
+        result = resp.json()
+        print("Riffusion API response:", result)
+        audio_url = result.get("audio_url")
+        if not audio_url:
+            return GenerateBeatResponse(success=False, error="Riffusion API не вернул ссылку на аудио")
+        # Скачиваем mp3
+        audio_resp = requests.get(audio_url, timeout=120)
+        if audio_resp.status_code != 200:
+            return GenerateBeatResponse(success=False, error="Не удалось скачать mp3 с Riffusion")
+        # Сохраняем файл
+        import uuid
+        filename = f"riffusion_{uuid.uuid4().hex}.mp3"
+        file_path = os.path.join(AUDIO_CACHE_DIR, filename)
+        with open(file_path, "wb") as f:
+            f.write(audio_resp.content)
+        return GenerateBeatResponse(success=True, audio_url=f"/audio_cache/{filename}")
+    except Exception as e:
+        return GenerateBeatResponse(success=False, error=str(e)) 

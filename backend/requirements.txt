@@ -10,3 +10,6 @@ passlib[bcrypt]
 python-jose[cryptography]
 python-multipart
 psycopg2-binary
+requests
+
+# Для генерации музыки через suno.ai требуется Node.js и puppeteer (npm install puppeteer)

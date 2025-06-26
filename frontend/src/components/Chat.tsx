@@ -2,6 +2,14 @@ import React, { useState, useRef, useEffect } from 'react';
 import { API_BASE_URL } from '../config';
 import './Chat.css';
 import { useTranslation } from 'react-i18next';
+import AudioWithCache from './AudioWithCache';
+
+declare global {
+  interface Window {
+    YT?: any;
+    [key: string]: any;
+  }
+}
 
 interface Message {
   id: string;
@@ -40,6 +48,11 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
   const [aiLang, setAiLang] = useState(() => localStorage.getItem('ai_lang') || 'ru');
   const aiLangObj = AI_LANGUAGES.find(l => l.code === aiLang) || AI_LANGUAGES[0];
   const [youtubeCache, setYoutubeCache] = useState<{ [key: string]: { videoId: string, url: string } }>({});
+  const [quotaExceeded, setQuotaExceeded] = useState(false);
+  const [manualLinks, setManualLinks] = useState('');
+  const [manualTracks, setManualTracks] = useState<string[]>([]);
+  const [generatingBeat, setGeneratingBeat] = useState(false);
+  const [generatedBeatUrl, setGeneratedBeatUrl] = useState<string | null>(null);
   const getYoutubeEmbedUrl = (videoId: string, startMs?: number) => {
     if (!videoId) return '';
     const startSec = startMs ? Math.floor(startMs / 1000) : 0;
@@ -115,42 +128,6 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
     } catch {}
   };
 
-  // Инициализация Spotify Web Playback SDK
-  useEffect(() => {
-    // Определяем функцию до загрузки скрипта
-    (window as any).onSpotifyWebPlaybackSDKReady = () => {
-      const token = localStorage.getItem('spotify_token');
-      if (!token || player) return;
-      // @ts-ignore
-      const _player = new window.Spotify.Player({
-        name: 'VibeMatch Player',
-        getOAuthToken: cb => { cb(token); },
-        volume: 0.5
-      });
-      _player.addListener('ready', ({ device_id }: any) => {
-        setDeviceId(device_id);
-        console.log('Spotify Player готов, device_id:', device_id);
-      });
-      _player.addListener('not_ready', ({ device_id }: any) => {
-        console.log('Устройство не готово:', device_id);
-      });
-      _player.connect();
-      setPlayer(_player);
-    };
-    // Динамически подключаем скрипт, если ещё не подключён
-    if (!document.getElementById('spotify-sdk')) {
-      const script = document.createElement('script');
-      script.id = 'spotify-sdk';
-      script.src = 'https://sdk.scdn.co/spotify-player.js';
-      script.async = true;
-      document.body.appendChild(script);
-    } else if ((window as any).Spotify) {
-      // Если SDK уже загружен
-      (window as any).onSpotifyWebPlaybackSDKReady();
-    }
-    // eslint-disable-next-line
-  }, [player]);
-
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -194,7 +171,6 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
         saveMessageToBackend(aiMessage);
       }
     } catch (error) {
-      console.error('Ошибка отправки сообщения:', error);
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: 'ai',
@@ -271,16 +247,14 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
         setMessages(prev => [...prev, analysisMessage]);
         saveMessageToBackend(analysisMessage);
         // Получаем рекомендации
+        const payload = analysisData && typeof analysisData === 'object' ? { mood_analysis: analysisData } : { mood_analysis: { mood: 'neutral' } };
         const recommendationsResponse = await fetch(`${apiBaseUrl}/chat/get-recommendations`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...(localStorage.getItem('auth_token') ? { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` } : {})
           },
-          body: JSON.stringify({
-            mood_analysis: analysisData,
-            user_preferences: userPreferences
-          })
+          body: JSON.stringify(payload)
         });
         const recommendationsData = await recommendationsResponse.json();
         const recommendationsMessage: Message = {
@@ -290,8 +264,10 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
           timestamp: new Date(),
           recommendations: {
             personal: recommendationsData.personal,
-            global: recommendationsData.global
-          }
+            global: recommendationsData.global,
+            ask_feedback: recommendationsData.ask_feedback
+          },
+          moodAnalysis: analysisData
         };
         setMessages(prev => [...prev, recommendationsMessage]);
         saveMessageToBackend(recommendationsMessage);
@@ -352,7 +328,9 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
     try {
       const resp = await fetch(`${API_BASE_URL}/recommend/youtube-search?q=${encodeURIComponent(trackName + ' ' + artist)}&max_results=1`);
       const data = await resp.json();
-      console.log('YouTube API response for', trackName, artist, data); // debug
+      if (data.error && data.error.includes('quota')) {
+        setQuotaExceeded(true);
+      }
       if (data.results && data.results.length > 0) {
         const videoId = data.results[0].video_id;
         const url = `https://www.youtube.com/watch?v=${videoId}`;
@@ -364,14 +342,159 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
     return { videoId: '', url: '' };
   };
 
+  // YouTube iFrame API — подключаем один раз
+  useEffect(() => {
+    if (!window.YT) {
+      const tag = document.createElement('script');
+      tag.src = 'https://www.youtube.com/iframe_api';
+      document.body.appendChild(tag);
+    }
+  }, []);
+
+  // Функция для воспроизведения сегмента YouTube
+  const playSegment = (playerId: string, videoId: string, start: number, end: number) => {
+    if (!window.YT || !window.YT.Player) return;
+    if (!window[`ytPlayer_${playerId}`]) {
+      window[`ytPlayer_${playerId}`] = new window.YT.Player(`yt-player-${playerId}`, {
+        height: '200',
+        width: '355',
+        videoId,
+        events: {
+          onReady: (event: any) => {
+            event.target.loadVideoById({ videoId, startSeconds: start, endSeconds: end });
+          }
+        }
+      });
+    } else {
+      window[`ytPlayer_${playerId}`].loadVideoById({ videoId, startSeconds: start, endSeconds: end });
+    }
+    setTimeout(() => {
+      window[`ytPlayer_${playerId}`]?.stopVideo();
+    }, (end - start) * 1000);
+  };
+
+  const handleClearChat = async () => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+    if (!window.confirm('Вы уверены, что хотите удалить весь чат?')) return;
+    await fetch(`${API_BASE_URL}/chat/history`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    setMessages([{
+      id: '1',
+      type: 'ai',
+      content:
+        aiLang === 'en'
+          ? "Hello! I'm your music assistant. Send me a photo or video, and I'll analyze the mood and suggest suitable music! 🎵"
+          : aiLang === 'kz'
+          ? "Сәлем! Мен сенің музыкалық көмекшіңмін. Маған фото немесе видео жібер, мен көңіл-күйді талдап, лайықты музыка ұсынамын! 🎵"
+          : "Привет! Я твой музыкальный помощник. Отправь мне фото или видео, и я проанализирую настроение и подберу подходящую музыку! 🎵",
+      timestamp: new Date()
+    }]);
+  };
+
+  // Функция для повторной подборки
+  const handleAnotherRecommendation = async (moodAnalysis: any) => {
+    setIsLoading(true);
+    setGeneratedBeatUrl(null);
+    try {
+      // moodAnalysis должен быть не пустым объектом
+      const payload = moodAnalysis && typeof moodAnalysis === 'object' ? { mood_analysis: moodAnalysis } : { mood_analysis: { mood: 'neutral' } };
+      const recommendationsResponse = await fetch(`${API_BASE_URL}/chat/get-recommendations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('auth_token') ? { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` } : {})
+        },
+        body: JSON.stringify(payload)
+      });
+      const recommendationsData = await recommendationsResponse.json();
+      const recommendationsMessage: Message = {
+        id: (Date.now() + 2).toString(),
+        type: 'ai',
+        content: `🎵 Ещё одна подборка:`,
+        timestamp: new Date(),
+        recommendations: {
+          personal: recommendationsData.personal,
+          global: recommendationsData.global,
+          ask_feedback: recommendationsData.ask_feedback
+        },
+        moodAnalysis: moodAnalysis
+      };
+      setMessages(prev => [...prev, recommendationsMessage]);
+      saveMessageToBackend(recommendationsMessage);
+    } catch (e) {
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        type: 'ai',
+        content: 'Ошибка при получении новой подборки.',
+        timestamp: new Date()
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Функция для генерации музыки
+  const handleGenerateBeat = async (moodAnalysis: any) => {
+    setGeneratingBeat(true);
+    setGeneratedBeatUrl(null);
+    try {
+      // Формируем prompt для генерации музыки
+      let prompt = '';
+      if (moodAnalysis && typeof moodAnalysis === 'object') {
+        prompt = moodAnalysis.description || moodAnalysis.caption || moodAnalysis.mood || 'uplifting pop music';
+      } else if (typeof moodAnalysis === 'string') {
+        prompt = moodAnalysis;
+      } else {
+        prompt = 'uplifting pop music';
+      }
+      const resp = await fetch(`${API_BASE_URL}/chat/generate-beat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt })
+      });
+      const data = await resp.json();
+      if (data.success && data.audio_url) {
+        setGeneratedBeatUrl(`${API_BASE_URL}${data.audio_url}`);
+      } else {
+        setMessages(prev => [...prev, {
+          id: (Date.now() + 1).toString(),
+          type: 'ai',
+          content: 'Ошибка генерации музыки: ' + (data.error || 'Неизвестная ошибка'),
+          timestamp: new Date()
+        }]);
+      }
+    } catch (e) {
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        type: 'ai',
+        content: 'Ошибка генерации музыки.',
+        timestamp: new Date()
+      }]);
+    } finally {
+      setGeneratingBeat(false);
+    }
+  };
+
   return (
     <div className="chat-container">
       <div className="chat-header">
-        <div style={{ marginBottom: 8 }}>
-          <div style={{ fontWeight: 600, fontSize: 18 }}>{t('ai_helper_title')}</div>
-          <div style={{ color: '#fff', fontSize: 14, marginTop: 2 }}>
-            🎬 {t('ai_helper_subtitle')}
+        <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 18 }}>{t('ai_helper_title')}</div>
+            <div style={{ color: '#fff', fontSize: 14, marginTop: 2 }}>
+              🎬 {t('ai_helper_subtitle')}
+            </div>
           </div>
+          <button
+            onClick={handleClearChat}
+            style={{ background: '#ff4d6d', color: 'white', border: 'none', borderRadius: 6, padding: '8px 18px', fontWeight: 600, fontSize: 15, cursor: 'pointer', marginLeft: 16 }}
+            title="Очистить чат"
+          >
+            🗑 Очистить чат
+          </button>
         </div>
       </div>
 
@@ -464,22 +587,49 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
                                         <td style={{ padding: 8 }}>{track.artist}</td>
                                         <td style={{ padding: 8 }}>{track.reason}</td>
                                         <td style={{ padding: 8, minWidth: 240, maxWidth: 260 }}>
-                                          {cached === undefined ? (
-                                            <span style={{ color: '#888', fontSize: 13 }}>Поиск видео...</span>
+                                          {track.youtube_id && typeof track.start_time === 'number' && typeof track.end_time === 'number' ? (
+                                            <div>
+                                              <button
+                                                style={{ fontSize: 18, background: '#1DB954', color: 'white', border: 'none', borderRadius: 4, padding: '4px 10px', cursor: 'pointer', marginBottom: 4 }}
+                                                onClick={() => playSegment(`${key}`, track.youtube_id, track.start_time, track.end_time)}
+                                                title="Воспроизвести сегмент YouTube"
+                                              >
+                                                ▶️
+                                              </button>
+                                              {typeof window !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod|Opera Mini|IEMobile/i.test(navigator.userAgent) ? null : (
+                                                <div id={`yt-player-${key}`}></div>
+                                              )}
+                                              <AudioWithCache
+                                                src={`${API_BASE_URL}/recommend/youtube-audio?video_id=${track.youtube_id}`}
+                                                style={{ marginTop: 8, width: 220 }}
+                                              />
+                                            </div>
+                                          ) : cached === undefined ? (
+                                            <span style={{ color: '#888', fontSize: 13 }}>
+                                              {quotaExceeded ? 'Сейчас квота YouTube API исчерпана' : 'Поиск видео...'}
+                                            </span>
                                           ) : cached.videoId ? (
-                                            <iframe
-                                              ref={el => { embedRefs.current[key] = el; }}
-                                              width="220"
-                                              height="124"
-                                              src={getYoutubeEmbedUrl(cached.videoId, track.start_time_ms)}
-                                              title={track.name}
-                                              frameBorder="0"
-                                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                              allowFullScreen
-                                              style={{ borderRadius: 8, marginTop: 4, display: 'block' }}
-                                            />
+                                            <>
+                                              <iframe
+                                                ref={el => { embedRefs.current[key] = el; }}
+                                                width="220"
+                                                height="124"
+                                                src={getYoutubeEmbedUrl(cached.videoId, track.start_time_ms)}
+                                                title={track.name}
+                                                frameBorder="0"
+                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                                allowFullScreen
+                                                style={{ borderRadius: 8, marginTop: 4, display: 'block' }}
+                                              />
+                                              <AudioWithCache
+                                                src={`${API_BASE_URL}/recommend/youtube-audio?video_id=${cached.videoId}`}
+                                                style={{ marginTop: 8, width: 220 }}
+                                              />
+                                            </>
                                           ) : (
-                                            <span style={{ color: '#888', fontSize: 13 }}>Видео не найдено</span>
+                                            <span style={{ color: '#888', fontSize: 13 }}>
+                                              {quotaExceeded ? 'Сейчас квота YouTube API исчерпана' : 'Видео не найдено'}
+                                            </span>
                                           )}
                                         </td>
                                       </tr>
@@ -494,6 +644,30 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
                     </div>
                   );
                 })()
+              )}
+              {message.recommendations && message.recommendations.ask_feedback && (
+                <div style={{ marginTop: 18, display: 'flex', gap: 16 }}>
+                  <button
+                    onClick={() => handleAnotherRecommendation(message.moodAnalysis || currentMoodAnalysis)}
+                    style={{ background: '#1DB954', color: 'white', border: 'none', borderRadius: 6, padding: '8px 18px', fontWeight: 600, fontSize: 15, cursor: 'pointer' }}
+                    disabled={isLoading}
+                  >
+                    Ещё подборка
+                  </button>
+                  <button
+                    onClick={() => handleGenerateBeat(message.moodAnalysis || currentMoodAnalysis)}
+                    style={{ background: '#667eea', color: 'white', border: 'none', borderRadius: 6, padding: '8px 18px', fontWeight: 600, fontSize: 15, cursor: 'pointer' }}
+                    disabled={generatingBeat}
+                  >
+                    {generatingBeat ? 'Генерация...' : 'Сгенерировать музыку'}
+                  </button>
+                </div>
+              )}
+              {generatedBeatUrl && (
+                <div style={{ marginTop: 18 }}>
+                  <b>🎶 Сгенерированный бит:</b>
+                  <AudioWithCache src={generatedBeatUrl} style={{ width: 220, marginTop: 8 }} />
+                </div>
               )}
               <div className="message-time">
                 {message.timestamp.toLocaleTimeString()}
@@ -511,6 +685,45 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
                 <span></span>
               </div>
             </div>
+          </div>
+        )}
+        
+        {quotaExceeded && (
+          <div style={{ margin: '24px 0', background: '#fffbe6', border: '1px solid #ffe58f', borderRadius: 8, padding: 18 }}>
+            <div style={{ fontWeight: 600, marginBottom: 8, color: '#d48806' }}>
+              Квота YouTube API исчерпана 😔
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              Хотите послушать конкретные треки? Введите ссылки на YouTube (можно несколько через запятую или с новой строки):
+            </div>
+            <textarea
+              value={manualLinks}
+              onChange={e => setManualLinks(e.target.value)}
+              placeholder="https://youtu.be/abc123, https://www.youtube.com/watch?v=xyz456"
+              style={{ width: '100%', minHeight: 60, borderRadius: 6, border: '1px solid #ccc', padding: 8, marginBottom: 8 }}
+            />
+            <button
+              onClick={() => {
+                const links = manualLinks.split(/\s|,|;/).map(s => s.trim()).filter(Boolean);
+                const ids = links.map(link => {
+                  const m = link.match(/(?:v=|be\/)([\w-]{11})/);
+                  return m ? m[1] : '';
+                }).filter(Boolean);
+                setManualTracks(ids);
+              }}
+              style={{ background: '#1DB954', color: 'white', border: 'none', borderRadius: 6, padding: '8px 18px', fontWeight: 600, fontSize: 15, cursor: 'pointer' }}
+            >
+              ▶️ Воспроизвести
+            </button>
+            {manualTracks.length > 0 && (
+              <div style={{ marginTop: 18 }}>
+                {manualTracks.map(id => (
+                  <div key={id} style={{ marginBottom: 16 }}>
+                    <AudioWithCache src={`${API_BASE_URL}/recommend/youtube-audio?video_id=${id}`} style={{ width: 220 }} />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
         
