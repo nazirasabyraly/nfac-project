@@ -3,12 +3,6 @@ from fastapi.responses import JSONResponse
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.services.spotify import (
-    get_spotify_auth_url,
-    exchange_code_for_token,
-    get_user_profile,
-    SpotifyAuthError
-)
 from app.config import FRONTEND_URL
 from ..database import get_db
 from ..models.user import User
@@ -23,11 +17,6 @@ async def get_ngrok_url(request: Request):
     base_url = str(request.base_url).rstrip('/')
     return {"backend_url": base_url}
 
-@router.get("/spotify/login")
-async def spotify_login():
-    auth_url = get_spotify_auth_url()
-    return RedirectResponse(auth_url)
-
 @router.get("/callback")
 async def callback(access_token: str = None):
     """Обрабатывает callback с access_token от Spotify"""
@@ -38,62 +27,6 @@ async def callback(access_token: str = None):
     return RedirectResponse(
         f"{FRONTEND_URL}/callback?access_token={access_token}"
     )
-
-@router.get("/spotify/callback")
-async def spotify_callback(code: str = None, error: str = None, db: Session = Depends(get_db)):
-    print(f"🔍 Spotify callback called")
-    print(f"📋 Parameters: code={'present' if code else 'missing'}, error={error}")
-    
-    if error:
-        print(f"❌ Spotify error: {error}")
-        # Redirect to frontend with error
-        return RedirectResponse(f"{FRONTEND_URL}/?error={error}")
-    
-    if not code:
-        print(f"❌ Missing code parameter")
-        # Redirect to frontend with error
-        return RedirectResponse(f"{FRONTEND_URL}/?error=missing_code")
-
-    try:
-        print(f"🔄 Exchanging code for token...")
-        token_data = await exchange_code_for_token(code)
-        print(f"✅ Token exchange successful: {token_data.keys()}")
-        
-        access_token = token_data["access_token"]
-        refresh_token = token_data.get("refresh_token")
-        print(f"🎯 Access token length: {len(access_token) if access_token else 0}")
-        
-        # Получаем профиль пользователя Spotify
-        profile = await get_user_profile(access_token)
-        spotify_id = profile.get("id")
-        
-        # Ищем пользователя в базе данных по Spotify ID
-        user = db.query(User).filter(User.spotify_id == spotify_id).first()
-        
-        if user:
-            # Обновляем токены существующего пользователя
-            auth_service.update_spotify_tokens(db, user.id, spotify_id, access_token, refresh_token)
-            print(f"✅ Обновлены токены для пользователя {user.username}")
-        else:
-            print(f"⚠️  Пользователь с Spotify ID {spotify_id} не найден в базе данных")
-        
-        # Перенаправляем на фронтенд с токеном
-        redirect_url = f"{FRONTEND_URL}/dashboard?token={access_token}&spotify_id={spotify_id}"
-        print(f"🔄 Redirecting to: {redirect_url}")
-        return RedirectResponse(redirect_url)
-
-    except SpotifyAuthError as e:
-        print(f"❌ Spotify auth error in spotify_callback: {str(e)}")
-        import traceback
-        print(f"❌ Traceback: {traceback.format_exc()}")
-        return RedirectResponse(f"{FRONTEND_URL}/?error=spotify_auth&message={str(e)}")
-    except Exception as e:
-        print(f"❌ Error in spotify_callback: {str(e)}")
-        print(f"❌ Error type: {type(e).__name__}")
-        import traceback
-        print(f"❌ Traceback: {traceback.format_exc()}")
-        # Redirect to frontend with error
-        return RedirectResponse(f"{FRONTEND_URL}/?error=auth_failed")
 
 @router.get("/spotify/token")
 async def spotify_token(code: str = None, error: str = None, db: Session = Depends(get_db)):

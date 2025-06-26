@@ -4,6 +4,12 @@ from typing import Dict, Any, List
 import json
 from ..services.openai_service import OpenAIService
 from ..config import MAX_FILE_SIZE, ALLOWED_EXTENSIONS
+from ..dependencies import get_current_user
+from sqlalchemy.orm import Session
+from ..database import get_db
+from ..models.user import SavedSong, User, ChatMessage
+from ..schemas import ChatMessageCreate, ChatMessageOut
+import asyncio
 
 router = APIRouter(tags=["chat"])
 
@@ -56,32 +62,37 @@ async def analyze_media(
 @router.post("/get-recommendations")
 async def get_music_recommendations(
     mood_analysis: Dict[str, Any],
-    user_id: str = None
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
-    Получает рекомендации музыки на основе анализа настроения
+    Получает две подборки: 5 персональных (по saved_songs) и 5 глобальных (по mood_analysis)
     """
     try:
-        # Получаем предпочтения пользователя из Spotify
-        user_preferences = {}
-        
-        if user_id:
-            # Здесь можно добавить получение предпочтений из базы данных
-            # Пока используем базовые предпочтения
-            user_preferences = {
-                "top_genres": ["pop", "electronic", "indie"],
-                "top_artists": ["The Weeknd", "Dua Lipa", "Post Malone"],
-                "top_tracks": ["Blinding Lights", "Levitating", "Circles"]
-            }
-        
-        # Получаем рекомендации от ИИ
-        recommendations = await openai_service.get_music_recommendations(
-            mood_analysis, 
-            user_preferences
-        )
-        
-        return JSONResponse(content=recommendations)
-        
+        global_prefs = {
+            "top_genres": ["pop", "electronic", "indie"],
+            "top_artists": ["The Weeknd", "Dua Lipa", "Post Malone"],
+            "top_tracks": ["Blinding Lights", "Levitating", "Circles"]
+        }
+        saved_songs = db.query(SavedSong).filter(SavedSong.user_id == current_user.id).all()
+        personal_prefs = {
+            "top_genres": [],
+            "top_artists": list({s.artist for s in saved_songs if s.artist}),
+            "top_tracks": list({s.title for s in saved_songs if s.title})
+        } if saved_songs else global_prefs
+        # PROMPT: просим ровно 5 треков
+        try:
+            global_task = openai_service.get_music_recommendations(mood_analysis, global_prefs, n_tracks=5)
+            personal_task = openai_service.get_music_recommendations(mood_analysis, personal_prefs, n_tracks=5)
+            global_rec, personal_rec = await asyncio.wait_for(
+                asyncio.gather(global_task, personal_task), timeout=40.0
+            )
+        except asyncio.TimeoutError:
+            return JSONResponse(status_code=504, content={"error": "AI recommendations timeout. Попробуйте ещё раз."})
+        return JSONResponse(content={
+            "global": global_rec["recommendations"],
+            "personal": personal_rec["recommendations"]
+        })
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка получения рекомендаций: {str(e)}")
 
@@ -143,4 +154,16 @@ async def get_supported_formats():
     return JSONResponse(content={
         "supported_formats": list(ALLOWED_EXTENSIONS),
         "max_file_size_mb": MAX_FILE_SIZE // (1024 * 1024)
-    }) 
+    })
+
+@router.get('/history', response_model=List[ChatMessageOut])
+def get_chat_history(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return db.query(ChatMessage).filter(ChatMessage.user_id == current_user.id).order_by(ChatMessage.timestamp).all()
+
+@router.post('/history', response_model=ChatMessageOut)
+def add_chat_message(msg: ChatMessageCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    db_msg = ChatMessage(user_id=current_user.id, **msg.dict())
+    db.add(db_msg)
+    db.commit()
+    db.refresh(db_msg)
+    return db_msg 

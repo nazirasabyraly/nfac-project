@@ -55,6 +55,22 @@ const resources = {
       'ai_helper_title': 'Музыкальный ИИ-помощник',
       'ai_helper_subtitle': 'Отправь фото или видео для анализа настроения',
       'ai_lang_label': 'Язык общения с ИИ:',
+      // Recommendations
+      'recommendations_search_placeholder': 'Поиск по названию, артисту, вайбу...',
+      'recommendations_search_button': 'Найти',
+      'recommendations_searching': 'Поиск...',
+      'recommendations_like': '❤️ В избранное',
+      'recommendations_liked': 'В избранном',
+      'recommendations_error': 'Ошибка поиска или добавления',
+      'recommendations_login_required': 'Требуется вход в систему',
+      'recommendations_success_like': 'Добавлено в избранное!',
+      // Favorites
+      'favorites_loading': 'Загрузка избранного...',
+      'favorites_error': 'Ошибка загрузки избранного',
+      'favorites_empty': 'У вас нет избранных песен.',
+      'favorites_delete': 'Удалить из избранного',
+      'favorites_deleted': 'Песня удалена из избранного',
+      'favorites_date_added': 'Добавлено',
     }
   },
   en: {
@@ -108,6 +124,22 @@ const resources = {
       'ai_helper_title': 'Music AI Assistant',
       'ai_helper_subtitle': 'Send a photo or video for mood analysis',
       'ai_lang_label': 'AI chat language:',
+      // Recommendations
+      'recommendations_search_placeholder': 'Search by title, artist, vibe...',
+      'recommendations_search_button': 'Search',
+      'recommendations_searching': 'Searching...',
+      'recommendations_like': '❤️ Add to favorites',
+      'recommendations_liked': 'In favorites',
+      'recommendations_error': 'Search or add error',
+      'recommendations_login_required': 'Login required',
+      'recommendations_success_like': 'Added to favorites!',
+      // Favorites
+      'favorites_loading': 'Loading favorites...',
+      'favorites_error': 'Failed to load favorites',
+      'favorites_empty': 'You have no favorite songs.',
+      'favorites_delete': 'Remove from favorites',
+      'favorites_deleted': 'Song removed from favorites',
+      'favorites_date_added': 'Added',
     }
   },
   kz: {
@@ -161,6 +193,22 @@ const resources = {
       'ai_helper_title': 'Музыкалық AI көмекші',
       'ai_helper_subtitle': 'Көңіл-күйді талдау үшін фото немесе видео жіберіңіз',
       'ai_lang_label': 'AI чат тілі:',
+      // Recommendations
+      'recommendations_search_placeholder': 'Атауы, орындаушысы, вайбы бойынша іздеу...',
+      'recommendations_search_button': 'Іздеу',
+      'recommendations_searching': 'Іздеуде...',
+      'recommendations_like': '❤️ Таңдаулыға қосу',
+      'recommendations_liked': 'Таңдаулыда',
+      'recommendations_error': 'Іздеу немесе қосу қатесі',
+      'recommendations_login_required': 'Кіру қажет',
+      'recommendations_success_like': 'Таңдаулыға қосылды!',
+      // Favorites
+      'favorites_loading': 'Таңдаулылар жүктелуде...',
+      'favorites_error': 'Таңдаулыларды жүктеу қатесі',
+      'favorites_empty': 'Сізде таңдаулы әндер жоқ.',
+      'favorites_delete': 'Таңдаулыдан өшіру',
+      'favorites_deleted': 'Ән таңдаулылардан өшірілді',
+      'favorites_date_added': 'Қосылған күні',
     }
   }
 };

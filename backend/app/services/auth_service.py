@@ -73,16 +73,4 @@ class AuthService:
         db.add(db_user)
         db.commit()
         db.refresh(db_user)
-        return db_user
-    
-    def update_spotify_tokens(self, db: Session, user_id: int, spotify_id: str, 
-                            access_token: str, refresh_token: str) -> User:
-        """Обновляет Spotify токены пользователя"""
-        user = db.query(User).filter(User.id == user_id).first()
-        if user:
-            user.spotify_id = spotify_id
-            user.spotify_token = access_token
-            user.spotify_refresh_token = refresh_token
-            db.commit()
-            db.refresh(user)
-        return user 
+        return db_user 

@@ -83,44 +83,6 @@ async def get_current_user(
     
     return UserSchema.from_orm(user)
 
-@router.post("/link-spotify")
-async def link_spotify_account(
-    spotify_id: str,
-    spotify_token: str,
-    spotify_refresh_token: str,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
-):
-    """Связывает Spotify аккаунт с существующим пользователем"""
-    username = auth_service.verify_token(credentials.credentials)
-    if username is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Недействительный токен",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    user = auth_service.get_user_by_username(db, username)
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Пользователь не найден",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    # Проверяем, не связан ли уже этот Spotify ID с другим пользователем
-    existing_user = db.query(User).filter(User.spotify_id == spotify_id).first()
-    if existing_user and existing_user.id != user.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Этот Spotify аккаунт уже связан с другим пользователем"
-        )
-    
-    # Обновляем токены пользователя
-    auth_service.update_spotify_tokens(db, user.id, spotify_id, spotify_token, spotify_refresh_token)
-    
-    return {"message": "Spotify аккаунт успешно связан", "user": UserSchema.from_orm(user)}
-
 def get_current_user_dependency(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)

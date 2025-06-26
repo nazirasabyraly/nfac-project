@@ -9,7 +9,7 @@ const getApiBaseUrl = () => {
   if (import.meta.env.VITE_API_BASE_URL) {
     return import.meta.env.VITE_API_BASE_URL;
   }
-  return "https://assembly-dp-rachel-produces.trycloudflare.com";
+  return "http://localhost:8001";
 };
 
 export const API_BASE_URL = getApiBaseUrl();

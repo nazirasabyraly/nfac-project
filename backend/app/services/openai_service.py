@@ -168,28 +168,26 @@ class OpenAIService:
         else:
             return "unknown"
     
-    async def get_music_recommendations(self, mood_analysis: Dict[str, Any], user_preferences: Dict[str, Any]) -> Dict[str, Any]:
+    async def get_music_recommendations(self, mood_analysis: Dict[str, Any], user_preferences: Dict[str, Any], n_tracks: int = 5) -> Dict[str, Any]:
         """
-        Генерирует рекомендации музыки на основе анализа настроения и предпочтений пользователя
+        Генерирует рекомендации музыки на основе анализа настроения и предпочтений пользователя (с учётом его лайкнутых треков)
         """
         prompt = f"""
         На основе анализа настроения и предпочтений пользователя, предложи рекомендации для плейлиста.
-        
+        Дай ровно {n_tracks} треков.
         Анализ настроения:
         - Настроение: {mood_analysis.get('mood', 'neutral')}
         - Эмоции: {mood_analysis.get('emotions', [])}
         - Описание: {mood_analysis.get('description', '')}
-        
-        Предпочтения пользователя:
+        Предпочтения пользователя (собраны на основе его лайкнутых треков):
         - Любимые жанры: {user_preferences.get('top_genres', [])}
         - Любимые исполнители: {user_preferences.get('top_artists', [])}
         - Любимые треки: {user_preferences.get('top_tracks', [])}
-        
+        Учитывай, что эти предпочтения отражают реальный вкус пользователя. Старайся подбирать треки, которые соответствуют как вайбу, так и этим вкусам.
         Предложи:
-        1. 5-10 треков, которые подходят к настроению
+        1. {n_tracks} треков, которые подходят к настроению и вкусам пользователя
         2. Объяснение, почему эти треки подходят
         3. Альтернативные жанры для исследования
-        
         Ответь в формате JSON:
         {{
             "recommended_tracks": [
@@ -199,7 +197,6 @@ class OpenAIService:
             "alternative_genres": ["жанр1", "жанр2"]
         }}
         """
-        
         response = self.client.chat.completions.create(
             model="gpt-4",
             messages=[
@@ -207,7 +204,6 @@ class OpenAIService:
             ],
             max_tokens=800
         )
-        
         content = response.choices[0].message.content
         try:
             import json

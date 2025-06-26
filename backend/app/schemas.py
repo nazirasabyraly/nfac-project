@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 class UserBase(BaseModel):
@@ -28,4 +28,34 @@ class Token(BaseModel):
     user: User
 
 class TokenData(BaseModel):
-    username: Optional[str] = None 
+    username: Optional[str] = None
+
+class SavedSongBase(BaseModel):
+    youtube_video_id: str
+    title: str
+    artist: Optional[str] = None
+
+class SavedSongCreate(SavedSongBase):
+    pass
+
+class SavedSong(SavedSongBase):
+    id: int
+    user_id: int
+    date_saved: datetime
+
+    class Config:
+        from_attributes = True
+
+class ChatMessageBase(BaseModel):
+    role: str
+    content: Optional[str] = None
+    media_url: Optional[str] = None
+    timestamp: Optional[datetime] = None
+
+class ChatMessageCreate(ChatMessageBase):
+    pass
+
+class ChatMessageOut(ChatMessageBase):
+    id: int
+    class Config:
+        orm_mode = True 
