@@ -53,6 +53,8 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
   const [manualTracks, setManualTracks] = useState<string[]>([]);
   const [generatingBeat, setGeneratingBeat] = useState(false);
   const [generatedBeatUrl, setGeneratedBeatUrl] = useState<string | null>(null);
+  const [clearChatError, setClearChatError] = useState<string | null>(null);
+  const [clearChatSuccess, setClearChatSuccess] = useState<boolean>(false);
   const getYoutubeEmbedUrl = (videoId: string, startMs?: number) => {
     if (!videoId) return '';
     const startSec = startMs ? Math.floor(startMs / 1000) : 0;
@@ -247,7 +249,7 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
         setMessages(prev => [...prev, analysisMessage]);
         saveMessageToBackend(analysisMessage);
         // Получаем рекомендации
-        const payload = analysisData && typeof analysisData === 'object' ? { mood_analysis: analysisData } : { mood_analysis: { mood: 'neutral' } };
+        const payload = analysisData && typeof analysisData === 'object' ? analysisData : { mood: 'neutral' };
         const recommendationsResponse = await fetch(`${apiBaseUrl}/chat/get-recommendations`, {
           method: 'POST',
           headers: {
@@ -342,6 +344,28 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
     return { videoId: '', url: '' };
   };
 
+  // Fetch YouTube videos for recommendations when they are loaded
+  useEffect(() => {
+    const fetchVideosForRecommendations = async () => {
+      messages.forEach(message => {
+        if (message.recommendations) {
+          ['personal', 'global'].forEach(type => {
+            if (message.recommendations[type]?.recommended_tracks) {
+              message.recommendations[type].recommended_tracks.forEach((track: any) => {
+                const key = `${type}__${track.name}__${track.artist}`;
+                if (!youtubeCache[key]) {
+                  fetchYoutubeVideo(track.name, track.artist);
+                }
+              });
+            }
+          });
+        }
+      });
+    };
+    
+    fetchVideosForRecommendations();
+  }, [messages, youtubeCache]);
+
   // YouTube iFrame API — подключаем один раз
   useEffect(() => {
     if (!window.YT) {
@@ -377,21 +401,33 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
     const token = localStorage.getItem('auth_token');
     if (!token) return;
     if (!window.confirm('Вы уверены, что хотите удалить весь чат?')) return;
-    await fetch(`${API_BASE_URL}/chat/history`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    setMessages([{
-      id: '1',
-      type: 'ai',
-      content:
-        aiLang === 'en'
-          ? "Hello! I'm your music assistant. Send me a photo or video, and I'll analyze the mood and suggest suitable music! 🎵"
-          : aiLang === 'kz'
-          ? "Сәлем! Мен сенің музыкалық көмекшіңмін. Маған фото немесе видео жібер, мен көңіл-күйді талдап, лайықты музыка ұсынамын! 🎵"
-          : "Привет! Я твой музыкальный помощник. Отправь мне фото или видео, и я проанализирую настроение и подберу подходящую музыку! 🎵",
-      timestamp: new Date()
-    }]);
+    setClearChatError(null);
+    setClearChatSuccess(false);
+    try {
+      const resp = await fetch(`${API_BASE_URL}/chat/history`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        setClearChatError(data.detail || 'Ошибка удаления чата.');
+        return;
+      }
+      setMessages([{
+        id: '1',
+        type: 'ai',
+        content:
+          aiLang === 'en'
+            ? "Hello! I'm your music assistant. Send me a photo or video, and I'll analyze the mood and suggest suitable music! 🎵"
+            : aiLang === 'kz'
+            ? "Сәлем! Мен сенің музыкалық көмекшіңмін. Маған фото немесе видео жібер, мен көңіл-күйді талдап, лайықты музыка ұсынамын! 🎵"
+            : "Привет! Я твой музыкальный помощник. Отправь мне фото или видео, и я проанализирую настроение и подберу подходящую музыку! 🎵",
+        timestamp: new Date()
+      }]);
+      setClearChatSuccess(true);
+    } catch (e) {
+      setClearChatError('Ошибка удаления чата.');
+    }
   };
 
   // Функция для повторной подборки
@@ -400,7 +436,7 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
     setGeneratedBeatUrl(null);
     try {
       // moodAnalysis должен быть не пустым объектом
-      const payload = moodAnalysis && typeof moodAnalysis === 'object' ? { mood_analysis: moodAnalysis } : { mood_analysis: { mood: 'neutral' } };
+      const payload = moodAnalysis && typeof moodAnalysis === 'object' ? moodAnalysis : { mood: 'neutral' };
       const recommendationsResponse = await fetch(`${API_BASE_URL}/chat/get-recommendations`, {
         method: 'POST',
         headers: {
@@ -450,14 +486,39 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
       } else {
         prompt = 'uplifting pop music';
       }
+      
       const resp = await fetch(`${API_BASE_URL}/chat/generate-beat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt })
       });
+      
       const data = await resp.json();
-      if (data.success && data.audio_url) {
-        setGeneratedBeatUrl(`${API_BASE_URL}${data.audio_url}`);
+      
+      if (data.success) {
+        if (data.status === 'pending') {
+          // Асинхронная генерация - показываем сообщение и начинаем polling
+          setMessages(prev => [...prev, {
+            id: (Date.now() + 1).toString(),
+            type: 'ai',
+            content: `🎵 ${data.message || 'Генерация музыки началась...'}`,
+            timestamp: new Date()
+          }]);
+          
+          // Начинаем polling для проверки статуса
+          if (data.request_id) {
+            await pollGenerationStatus(data.request_id);
+          }
+        } else if (data.audio_url) {
+          // Готовый результат
+          setGeneratedBeatUrl(`${API_BASE_URL}${data.audio_url}`);
+          setMessages(prev => [...prev, {
+            id: (Date.now() + 1).toString(),
+            type: 'ai',
+            content: '🎵 Музыка готова!',
+            timestamp: new Date()
+          }]);
+        }
       } else {
         setMessages(prev => [...prev, {
           id: (Date.now() + 1).toString(),
@@ -478,6 +539,93 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
     }
   };
 
+  // Функция для polling статуса генерации
+  const pollGenerationStatus = async (requestId: string) => {
+    const maxAttempts = 24; // Максимум 2 минуты (24 * 5 секунд)
+    let attempts = 0;
+    
+    const poll = async () => {
+      try {
+        const resp = await fetch(`${API_BASE_URL}/chat/generate-beat/status`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ request_id: requestId })
+        });
+        const data = await resp.json();
+        
+        if (data.success && data.status) {
+          const status = data.status.status || data.status;
+          
+          if (status === 'complete') {
+            // Генерация завершена
+            const audioUrl = data.status.local_audio_url || data.status.audio_url;
+            if (audioUrl) {
+              setGeneratedBeatUrl(`${API_BASE_URL}${audioUrl}`);
+              setMessages(prev => [...prev, {
+                id: (Date.now() + 1).toString(),
+                type: 'ai',
+                content: '🎵 Музыка готова!',
+                timestamp: new Date()
+              }]);
+              return;
+            }
+          } else if (status === 'failed') {
+            setMessages(prev => [...prev, {
+              id: (Date.now() + 1).toString(),
+              type: 'ai',
+              content: 'Ошибка генерации музыки: процесс завершился с ошибкой',
+              timestamp: new Date()
+            }]);
+            return;
+          } else if (status === 'pending') {
+            // Показываем прогресс
+            setMessages(prev => {
+              const lastMessage = prev[prev.length - 1];
+              if (lastMessage && lastMessage.content.includes('Генерация началась')) {
+                const updatedMessage = {
+                  ...lastMessage,
+                  content: `🎵 Генерация в процессе... (${attempts + 1}/${maxAttempts})`
+                };
+                return [...prev.slice(0, -1), updatedMessage];
+              }
+              return prev;
+            });
+          }
+        }
+        
+        attempts++;
+        if (attempts < maxAttempts) {
+          // Продолжаем polling через 5 секунд
+          setTimeout(poll, 5000);
+        } else {
+          setMessages(prev => [...prev, {
+            id: (Date.now() + 1).toString(),
+            type: 'ai',
+            content: 'Время ожидания генерации истекло (2 минуты). Попробуйте еще раз.',
+            timestamp: new Date()
+          }]);
+        }
+      } catch (e) {
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 5000);
+        } else {
+          setMessages(prev => [...prev, {
+            id: (Date.now() + 1).toString(),
+            type: 'ai',
+            content: 'Ошибка проверки статуса генерации.',
+            timestamp: new Date()
+          }]);
+        }
+      }
+    };
+    
+    // Начинаем polling через 5 секунд
+    setTimeout(poll, 5000);
+  };
+
   return (
     <div className="chat-container">
       <div className="chat-header">
@@ -496,6 +644,8 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
             🗑 Очистить чат
           </button>
         </div>
+        {clearChatError && <div style={{ color: 'red', marginTop: 8 }}>{clearChatError}</div>}
+        {clearChatSuccess && <div style={{ color: 'green', marginTop: 8 }}>Чат успешно удалён!</div>}
       </div>
 
       <div className="chat-messages">
@@ -580,7 +730,6 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
                                   {message.recommendations[type].recommended_tracks.map((track: any, idx: number) => {
                                     const key = `${type}__${track.name}__${track.artist}`;
                                     const cached = youtubeCache[key];
-                                    if (!cached) fetchYoutubeVideo(track.name, track.artist);
                                     return (
                                       <tr key={key}>
                                         <td style={{ padding: 8 }}>{track.name}</td>
@@ -728,6 +877,44 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
         )}
         
         <div ref={messagesEndRef} />
+      </div>
+
+      {/* Блок для ручного ввода YouTube-ссылок для конвертации в аудио (всегда видим) */}
+      <div style={{ margin: '24px 0', background: '#fffbe6', border: '1px solid #ffe58f', borderRadius: 8, padding: 18 }}>
+        <div style={{ fontWeight: 600, marginBottom: 8, color: '#d48806' }}>
+          Конвертация YouTube в аудио
+        </div>
+        <div style={{ marginBottom: 8 }}>
+          Вставьте ссылку на YouTube из списка рекомендаций или любую другую (можно несколько через запятую или с новой строки):
+        </div>
+        <textarea
+          value={manualLinks}
+          onChange={e => setManualLinks(e.target.value)}
+          placeholder="https://youtu.be/abc123, https://www.youtube.com/watch?v=xyz456"
+          style={{ width: '100%', minHeight: 60, borderRadius: 6, border: '1px solid #ccc', padding: 8, marginBottom: 8 }}
+        />
+        <button
+          onClick={() => {
+            const links = manualLinks.split(/\s|,|;/).map(s => s.trim()).filter(Boolean);
+            const ids = links.map(link => {
+              const m = link.match(/(?:v=|be\/)([\w-]{11})/);
+              return m ? m[1] : '';
+            }).filter(Boolean);
+            setManualTracks(ids);
+          }}
+          style={{ background: '#1DB954', color: 'white', border: 'none', borderRadius: 6, padding: '8px 18px', fontWeight: 600, fontSize: 15, cursor: 'pointer' }}
+        >
+          ▶️ Сконвертировать в аудио
+        </button>
+        {manualTracks.length > 0 && (
+          <div style={{ marginTop: 18 }}>
+            {manualTracks.map(id => (
+              <div key={id} style={{ marginBottom: 16 }}>
+                <AudioWithCache src={`${API_BASE_URL}/recommend/youtube-audio?video_id=${id}`} style={{ width: 220 }} />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="chat-input-container">

@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from app.api import auth, media, recommend, chat, users
 from app.config import HOST, PORT
 from app.models.user import Base
@@ -22,6 +23,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/health")
+async def health_check():
+    return JSONResponse(content={"status": "ok", "message": "VibeMatch API is running"})
 
 # Подключаем роуты
 app.include_router(auth.router, prefix="/auth")

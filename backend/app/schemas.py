@@ -62,7 +62,14 @@ class ChatMessageOut(ChatMessageBase):
 class GenerateBeatRequest(BaseModel):
     prompt: str
 
+class GenerateBeatStatusRequest(BaseModel):
+    request_id: str
+
 class GenerateBeatResponse(BaseModel):
     success: bool
     audio_url: Optional[str] = None
-    error: Optional[str] = None 
+    error: Optional[str] = None
+    status: Optional[str] = None
+    request_id: Optional[str] = None
+    callback_url: Optional[str] = None
+    message: Optional[str] = None 
