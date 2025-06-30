@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { API_BASE_URL } from '../config';
+import { API_BASE_URL, handleTokenExpiration, checkTokenValidity } from '../config';
 import './Chat.css';
 import { useTranslation } from 'react-i18next';
 import AudioWithCache from './AudioWithCache';
@@ -19,6 +19,7 @@ interface Message {
   mediaUrl?: string;
   moodAnalysis?: any;
   recommendations?: any;
+  generatedBeatUrl?: string;
 }
 
 interface ChatProps {
@@ -52,7 +53,6 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
   const [manualLinks, setManualLinks] = useState('');
   const [manualTracks, setManualTracks] = useState<string[]>([]);
   const [generatingBeat, setGeneratingBeat] = useState(false);
-  const [generatedBeatUrl, setGeneratedBeatUrl] = useState<string | null>(null);
   const [clearChatError, setClearChatError] = useState<string | null>(null);
   const [clearChatSuccess, setClearChatSuccess] = useState<boolean>(false);
   const getYoutubeEmbedUrl = (videoId: string, startMs?: number) => {
@@ -74,6 +74,11 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
     const fetchHistory = async () => {
       const token = localStorage.getItem('auth_token');
       if (!token) return;
+      
+      // Проверяем валидность токена
+      const isValid = await checkTokenValidity();
+      if (!isValid) return;
+      
       try {
         const resp = await fetch(`${API_BASE_URL}/chat/history`, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -102,19 +107,35 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
               mediaUrl: msg.media_url || undefined
             })));
           }
+        } else if (resp.status === 401) {
+          handleTokenExpiration();
         }
-      } catch {}
+      } catch (error) {
+        console.error('Ошибка загрузки истории:', error);
+      }
     };
     fetchHistory();
     // eslint-disable-next-line
   }, [aiLang]);
+
+  // Периодическая проверка токена каждые 5 минут
+  useEffect(() => {
+    const tokenCheckInterval = setInterval(async () => {
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        await checkTokenValidity();
+      }
+    }, 5 * 60 * 1000); // 5 минут
+
+    return () => clearInterval(tokenCheckInterval);
+  }, []);
 
   // Сохраняем новое сообщение в backend
   const saveMessageToBackend = async (msg: Message) => {
     const token = localStorage.getItem('auth_token');
     if (!token) return;
     try {
-      await fetch(`${API_BASE_URL}/chat/history`, {
+      const response = await fetch(`${API_BASE_URL}/chat/history`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -127,7 +148,13 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
           timestamp: msg.timestamp
         })
       });
-    } catch {}
+      
+      if (response.status === 401) {
+        handleTokenExpiration();
+      }
+    } catch (error) {
+      console.error('Ошибка сохранения сообщения:', error);
+    }
   };
 
   const scrollToBottom = () => {
@@ -409,6 +436,10 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!resp.ok) {
+        if (resp.status === 401) {
+          handleTokenExpiration();
+          return;
+        }
         const data = await resp.json().catch(() => ({}));
         setClearChatError(data.detail || 'Ошибка удаления чата.');
         return;
@@ -433,7 +464,6 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
   // Функция для повторной подборки
   const handleAnotherRecommendation = async (moodAnalysis: any) => {
     setIsLoading(true);
-    setGeneratedBeatUrl(null);
     try {
       // moodAnalysis должен быть не пустым объектом
       const payload = moodAnalysis && typeof moodAnalysis === 'object' ? moodAnalysis : { mood: 'neutral' };
@@ -475,7 +505,6 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
   // Функция для генерации музыки
   const handleGenerateBeat = async (moodAnalysis: any) => {
     setGeneratingBeat(true);
-    setGeneratedBeatUrl(null);
     try {
       // Формируем prompt для генерации музыки
       let prompt = '';
@@ -498,12 +527,14 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
       if (data.success) {
         if (data.status === 'pending') {
           // Асинхронная генерация - показываем сообщение и начинаем polling
-          setMessages(prev => [...prev, {
+          const aiMessage: Message = {
             id: (Date.now() + 1).toString(),
             type: 'ai',
             content: `🎵 ${data.message || 'Генерация музыки началась...'}`,
             timestamp: new Date()
-          }]);
+          };
+          setMessages(prev => [...prev, aiMessage]);
+          saveMessageToBackend(aiMessage);
           
           // Начинаем polling для проверки статуса
           if (data.request_id) {
@@ -511,29 +542,35 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
           }
         } else if (data.audio_url) {
           // Готовый результат
-          setGeneratedBeatUrl(`${API_BASE_URL}${data.audio_url}`);
-          setMessages(prev => [...prev, {
+          const aiMessage: Message = {
             id: (Date.now() + 1).toString(),
             type: 'ai',
             content: '🎵 Музыка готова!',
-            timestamp: new Date()
-          }]);
+            timestamp: new Date(),
+            generatedBeatUrl: `${API_BASE_URL}${data.audio_url}`
+          };
+          setMessages(prev => [...prev, aiMessage]);
+          saveMessageToBackend(aiMessage);
         }
       } else {
-        setMessages(prev => [...prev, {
+        const errorMessage: Message = {
           id: (Date.now() + 1).toString(),
           type: 'ai',
           content: 'Ошибка генерации музыки: ' + (data.error || 'Неизвестная ошибка'),
           timestamp: new Date()
-        }]);
+        };
+        setMessages(prev => [...prev, errorMessage]);
+        saveMessageToBackend(errorMessage);
       }
     } catch (e) {
-      setMessages(prev => [...prev, {
+      const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: 'ai',
         content: 'Ошибка генерации музыки.',
         timestamp: new Date()
-      }]);
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      saveMessageToBackend(errorMessage);
     } finally {
       setGeneratingBeat(false);
     }
@@ -562,22 +599,26 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
             // Генерация завершена
             const audioUrl = data.status.local_audio_url || data.status.audio_url;
             if (audioUrl) {
-              setGeneratedBeatUrl(`${API_BASE_URL}${audioUrl}`);
-              setMessages(prev => [...prev, {
+              const aiMessage: Message = {
                 id: (Date.now() + 1).toString(),
                 type: 'ai',
                 content: '🎵 Музыка готова!',
-                timestamp: new Date()
-              }]);
+                timestamp: new Date(),
+                generatedBeatUrl: `${API_BASE_URL}${audioUrl}`
+              };
+              setMessages(prev => [...prev, aiMessage]);
+              saveMessageToBackend(aiMessage);
               return;
             }
           } else if (status === 'failed') {
-            setMessages(prev => [...prev, {
+            const errorMessage: Message = {
               id: (Date.now() + 1).toString(),
               type: 'ai',
               content: 'Ошибка генерации музыки: процесс завершился с ошибкой',
               timestamp: new Date()
-            }]);
+            };
+            setMessages(prev => [...prev, errorMessage]);
+            saveMessageToBackend(errorMessage);
             return;
           } else if (status === 'pending') {
             // Показываем прогресс
@@ -600,24 +641,28 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
           // Продолжаем polling через 5 секунд
           setTimeout(poll, 5000);
         } else {
-          setMessages(prev => [...prev, {
+          const timeoutMessage: Message = {
             id: (Date.now() + 1).toString(),
             type: 'ai',
             content: 'Время ожидания генерации истекло (2 минуты). Попробуйте еще раз.',
             timestamp: new Date()
-          }]);
+          };
+          setMessages(prev => [...prev, timeoutMessage]);
+          saveMessageToBackend(timeoutMessage);
         }
       } catch (e) {
         attempts++;
         if (attempts < maxAttempts) {
           setTimeout(poll, 5000);
         } else {
-          setMessages(prev => [...prev, {
+          const errorMessage: Message = {
             id: (Date.now() + 1).toString(),
             type: 'ai',
             content: 'Ошибка проверки статуса генерации.',
             timestamp: new Date()
-          }]);
+          };
+          setMessages(prev => [...prev, errorMessage]);
+          saveMessageToBackend(errorMessage);
         }
       }
     };
@@ -812,10 +857,10 @@ const Chat: React.FC<ChatProps> = ({ userPreferences }) => {
                   </button>
                 </div>
               )}
-              {generatedBeatUrl && (
+              {message.generatedBeatUrl && (
                 <div style={{ marginTop: 18 }}>
                   <b>🎶 Сгенерированный бит:</b>
-                  <AudioWithCache src={generatedBeatUrl} style={{ width: 220, marginTop: 8 }} />
+                  <AudioWithCache src={message.generatedBeatUrl} style={{ width: 220, marginTop: 8 }} />
                 </div>
               )}
               <div className="message-time">

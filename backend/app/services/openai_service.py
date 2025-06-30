@@ -4,11 +4,35 @@ import mimetypes
 from typing import Optional, Dict, Any
 import openai
 from fastapi import UploadFile
-from ..config import OPENAI_API_KEY
+from ..config import (
+    AZURE_OPENAI_API_KEY, 
+    AZURE_OPENAI_ENDPOINT, 
+    AZURE_OPENAI_API_VERSION, 
+    AZURE_OPENAI_DEPLOYMENT_NAME,
+    OPENAI_API_KEY
+)
 
 class OpenAIService:
     def __init__(self):
-        self.client = openai.OpenAI(api_key=OPENAI_API_KEY)
+        # Проверяем, настроен ли Azure OpenAI
+        if AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_DEPLOYMENT_NAME:
+            # Используем Azure OpenAI
+            self.client = openai.AzureOpenAI(
+                api_key=AZURE_OPENAI_API_KEY,
+                api_version=AZURE_OPENAI_API_VERSION,
+                azure_endpoint=AZURE_OPENAI_ENDPOINT
+            )
+            self.deployment_name = AZURE_OPENAI_DEPLOYMENT_NAME
+            self.use_azure = True
+            print("🔵 Используется Azure OpenAI")
+        elif OPENAI_API_KEY:
+            # Используем обычный OpenAI
+            self.client = openai.OpenAI(api_key=OPENAI_API_KEY)
+            self.deployment_name = None
+            self.use_azure = False
+            print("🟢 Используется OpenAI API")
+        else:
+            raise ValueError("Не настроен ни Azure OpenAI, ни OpenAI API")
     
     async def analyze_media_mood(self, file: UploadFile) -> Dict[str, Any]:
         """
@@ -61,24 +85,73 @@ class OpenAIService:
         }
         """
         
-        response = self.client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
+        # Для Azure OpenAI используем модель с поддержкой Vision
+        if self.use_azure:
+            # Пробуем использовать gpt-4o для Vision (если доступен в Azure)
+            try:
+                response = self.client.chat.completions.create(
+                    model="gpt-4o",  # Используем gpt-4o для Vision
+                    messages=[
                         {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{base64_image}"
-                            }
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:image/jpeg;base64,{base64_image}"
+                                    }
+                                }
+                            ]
                         }
-                    ]
-                }
-            ],
-            max_tokens=500
-        )
+                    ],
+                    max_tokens=500
+                )
+            except Exception as e:
+                # Если gpt-4o недоступен, используем обычный OpenAI
+                print(f"Azure OpenAI Vision недоступен: {e}")
+                if OPENAI_API_KEY:
+                    client = openai.OpenAI(api_key=OPENAI_API_KEY)
+                    response = client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": [
+                                    {"type": "text", "text": prompt},
+                                    {
+                                        "type": "image_url",
+                                        "image_url": {
+                                            "url": f"data:image/jpeg;base64,{base64_image}"
+                                        }
+                                    }
+                                ]
+                            }
+                        ],
+                        max_tokens=500
+                    )
+                else:
+                    raise e
+        else:
+            # Обычный OpenAI
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{base64_image}"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=500
+            )
         
         # Парсим ответ
         content = response.choices[0].message.content
@@ -96,6 +169,7 @@ class OpenAIService:
                     result = {}
             else:
                 result = {}
+        
         # Формируем финальный ответ с отдельными полями
         mood = result.get("mood", "neutral")
         emotions = result.get("emotions", [])
@@ -106,6 +180,7 @@ class OpenAIService:
         if not caption and description:
             # Если нет caption, делаем его из description
             caption = description[:100] + ("..." if len(description) > 100 else "")
+        
         return {
             "success": True,
             "mood": mood,
@@ -173,51 +248,99 @@ class OpenAIService:
         Генерирует рекомендации музыки на основе анализа настроения и предпочтений пользователя (с учётом его лайкнутых треков)
         """
         prompt = f"""
-        На основе анализа настроения и предпочтений пользователя, предложи рекомендации для плейлиста.
-        Дай ровно {n_tracks} треков.
-        Анализ настроения:
-        - Настроение: {mood_analysis.get('mood', 'neutral')}
-        - Эмоции: {mood_analysis.get('emotions', [])}
-        - Описание: {mood_analysis.get('description', '')}
-        Предпочтения пользователя (собраны на основе его лайкнутых треков):
-        - Любимые жанры: {user_preferences.get('top_genres', [])}
-        - Любимые исполнители: {user_preferences.get('top_artists', [])}
-        - Любимые треки: {user_preferences.get('top_tracks', [])}
-        Учитывай, что эти предпочтения отражают реальный вкус пользователя. Старайся подбирать треки, которые соответствуют как вайбу, так и этим вкусам.
-        Предложи:
-        1. {n_tracks} треков, которые подходят к настроению и вкусам пользователя
-        2. Объяснение, почему эти треки подходят
-        3. Альтернативные жанры для исследования
+        На основе настроения "{mood_analysis.get('mood', 'neutral')}" и эмоций {mood_analysis.get('emotions', [])} предложи {n_tracks} музыкальных треков.
+        
+        Предпочтения пользователя: {user_preferences.get('top_artists', [])}
+        
         Ответь в формате JSON:
         {{
             "recommended_tracks": [
                 {{"name": "название", "artist": "исполнитель", "reason": "почему подходит"}}
             ],
-            "explanation": "объяснение рекомендаций",
+            "explanation": "краткое объяснение",
             "alternative_genres": ["жанр1", "жанр2"]
         }}
         """
-        response = self.client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=800
-        )
-        content = response.choices[0].message.content
+        
+        # Выбираем модель и клиент в зависимости от провайдера
+        if self.use_azure:
+            # Для Azure OpenAI используем deployment_name (gpt-4o)
+            model = self.deployment_name
+            client = self.client
+            print(f"[RECOMMEND] Используем Azure OpenAI с моделью: {model}")
+        else:
+            # Для обычного OpenAI используем gpt-4
+            model = "gpt-4"
+            client = self.client
+            print(f"[RECOMMEND] Используем OpenAI API с моделью: {model}")
+        
         try:
-            import json
-            result = json.loads(content)
+            print(f"[RECOMMEND] Отправляем запрос к модели {model}...")
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=800,
+                timeout=30  # Увеличиваем timeout
+            )
+            content = response.choices[0].message.content
+            print(f"[RECOMMEND] Получен ответ от {model}: {content}")
+            try:
+                import json
+                # Сначала пробуем парсить как обычный JSON
+                result = json.loads(content)
+            except json.JSONDecodeError:
+                # Если не получилось, ищем JSON в markdown блоке
+                import re
+                json_match = re.search(r'```json\s*(\{[\s\S]*?\})\s*```', content)
+                if json_match:
+                    try:
+                        result = json.loads(json_match.group(1))
+                    except json.JSONDecodeError:
+                        print(f"[RECOMMEND] Ошибка парсинга JSON из markdown: {json_match.group(1)}")
+                        result = {
+                            "explanation": content,
+                            "recommended_tracks": [],
+                            "alternative_genres": []
+                        }
+                else:
+                    # Если markdown блок не найден, ищем любой JSON в тексте
+                    json_match = re.search(r'\{[\s\S]*\}', content)
+                    if json_match:
+                        try:
+                            result = json.loads(json_match.group(0))
+                        except json.JSONDecodeError:
+                            print(f"[RECOMMEND] Ошибка парсинга найденного JSON: {json_match.group(0)}")
+                            result = {
+                                "explanation": content,
+                                "recommended_tracks": [],
+                                "alternative_genres": []
+                            }
+                    else:
+                        print(f"[RECOMMEND] JSON не найден в ответе: {content}")
+                        result = {
+                            "explanation": content,
+                            "recommended_tracks": [],
+                            "alternative_genres": []
+                        }
+            
             return {
                 "success": True,
                 "recommendations": result
             }
-        except json.JSONDecodeError:
+        except Exception as e:
+            print(f"[RECOMMEND] Ошибка при получении рекомендаций: {e}")
+            # Возвращаем базовые рекомендации в случае ошибки
             return {
                 "success": True,
                 "recommendations": {
-                    "explanation": content,
-                    "recommended_tracks": [],
-                    "alternative_genres": []
+                    "explanation": f"Не удалось получить персонализированные рекомендации: {str(e)}",
+                    "recommended_tracks": [
+                        {"name": "Blinding Lights", "artist": "The Weeknd", "reason": "Энергичный поп-трек"},
+                        {"name": "Levitating", "artist": "Dua Lipa", "reason": "Летний вайб"},
+                        {"name": "Circles", "artist": "Post Malone", "reason": "Мелодичный трек"}
+                    ],
+                    "alternative_genres": ["pop", "electronic", "indie"]
                 }
             } 

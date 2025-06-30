@@ -21,3 +21,47 @@ export const updateApiBaseUrl = (ngrokUrl: string) => {
     window.location.reload(); // Перезагружаем страницу для применения нового URL
   }
 };
+
+// Функция для обработки истекших токенов
+export const handleTokenExpiration = () => {
+  if (typeof window !== 'undefined') {
+    // Очищаем токен
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('user_id');
+    
+    // Показываем уведомление
+    alert('Сессия завершилась из-за бездействия. Пожалуйста, войдите в систему снова.');
+    
+    // Перенаправляем на страницу логина (корневой маршрут)
+    window.location.href = '/';
+  }
+};
+
+// Функция для проверки токена
+export const checkTokenValidity = async () => {
+  const token = localStorage.getItem('auth_token');
+  if (!token) {
+    handleTokenExpiration();
+    return false;
+  }
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/verify`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    if (!response.ok) {
+      handleTokenExpiration();
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Ошибка проверки токена:', error);
+    handleTokenExpiration();
+    return false;
+  }
+};

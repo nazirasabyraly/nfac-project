@@ -139,9 +139,15 @@ async def chat_with_ai(
         Можешь предложить жанры, исполнителей или обсудить музыкальные предпочтения.
         """
         
+        # Выбираем модель в зависимости от провайдера
+        if openai_service.use_azure:
+            model = openai_service.deployment_name
+        else:
+            model = "gpt-4"
+        
         # Получаем ответ от ИИ
         response = openai_service.client.chat.completions.create(
-            model="gpt-4",
+            model=model,
             messages=[
                 {"role": "system", "content": "Ты дружелюбный музыкальный эксперт, который помогает людям находить музыку по настроению."},
                 {"role": "user", "content": context}
